@@ -1,0 +1,66 @@
+// See https://aka.ms/vscode-remote/devcontainer.json for format details.
+{
+  "image": "mcr.microsoft.com/devcontainers/python:3.14-trixie",
+  "name": "Async I/O modbus library for Remeha appliances",
+  "containerEnv": {
+    "PYTHONASYNCIODEBUG": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylint",
+        "ms-python.vscode-python-envs",
+        "redhat.vscode-yaml",
+        "esbenp.prettier-vscode",
+        "wholroyd.jinja",
+        "gitHub.vscode-pull-request-github",
+        "njpwerner.autodocstring",
+        "KevinRose.vsc-python-indent",
+        "donjayamanne.python-environment-manager",
+        "fanaticpythoner.better-todo-tree"
+      ],
+      "settings": {
+        "[python]": {
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          },
+          "linting.pylintEnabled": true,
+          "linting.enabled": true
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[jsonc]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[yaml]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[md]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "editor.tabSize": 2,
+        "editor.formatOnPaste": false,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "extensions.verifySignature": false,
+        "files.eol": "\n",
+        "files.trimTrailingWhitespace": true,
+        "json.schemaDownload.enable": true,
+        "python.terminal.activateEnvInCurrentTerminal": true,
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.analysis.autoSearchPaths": false,
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/jsburckhardt/devcontainer-features/uv:latest": {},
+    "ghcr.io/jsburckhardt/devcontainer-features/ruff:latest": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/warrenbuckley/codespace-features/sqlite:latest": {}
+  }
+}

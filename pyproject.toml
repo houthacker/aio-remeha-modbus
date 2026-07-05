@@ -1,0 +1,22 @@
+[project]
+name = "aio-remeha-modbus"
+version = "0.1.0"
+description = "Async I/O modbus API for Remeha appliances"
+readme = "README.md"
+authors = [
+    { name = "houthacker", email = "houthacker@pm.me" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+aio-remeha-modbus = "aio_remeha_modbus:main"
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
