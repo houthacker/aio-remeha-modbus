@@ -1,6 +1,7 @@
 """Tests for ClimateZone."""
 
 import pytest
+from conftest import get_api
 from freezegun import freeze_time
 
 from aio_remeha_modbus.api.api import (
@@ -15,7 +16,6 @@ from aio_remeha_modbus.api.const import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from tests.conftest import get_api
 
 
 def test_device_board_category():
