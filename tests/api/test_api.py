@@ -3,7 +3,9 @@
 from datetime import datetime, time
 
 import pytest
+from conftest import get_api
 from pymodbus import ModbusException
+from util.registers import SENSOR_REGISTERS
 
 from aio_remeha_modbus.api.api import (
     ConnectionType,
@@ -38,8 +40,6 @@ from aio_remeha_modbus.api.schedule import (
     ZoneSchedule,
 )
 from aio_remeha_modbus.helpers.modbus import to_gtw08_null_value
-from tests.conftest import get_api
-from tests.util.registers import SENSOR_REGISTERS
 
 
 @pytest.mark.asyncio

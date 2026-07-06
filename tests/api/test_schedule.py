@@ -4,6 +4,7 @@ from datetime import date, time
 from unittest.mock import patch
 
 import pytest
+from conftest import get_api, json_fixture
 
 from aio_remeha_modbus.api.const import (
     AUTO_SCHEDULE_DEFAULT_ID,
@@ -25,7 +26,6 @@ from aio_remeha_modbus.api.schedule import (
     ZoneSchedule,
 )
 from aio_remeha_modbus.helpers.modbus import from_registers
-from tests.conftest import get_api, json_fixture
 
 
 def test_decode_time_schedule():
