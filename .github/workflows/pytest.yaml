@@ -25,14 +25,16 @@ jobs:
       - name: Set PY env
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
 
-      - name: Install dependencies
-        run: |
-          python -m pip install uv
-          uv sync
+      - name: Install uv and dependencies
+        uses: astral-sh/setup-uv
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+
       - name: Run pytest
         id: run_pytest
         run: |
-          pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=custom_components/remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
+          uv run pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=custom_components/remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
       - name: Check for test failures
         if: ${{ failure() }}
         run: |
