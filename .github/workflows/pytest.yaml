@@ -34,7 +34,7 @@ jobs:
       - name: Run pytest
         id: run_pytest
         run: |
-          uv run pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=src/aio-remeha-modbus | tee ${{ github.workspace }}/pytest-coverage.txt
+          uv run pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=aio-remeha-modbus | tee ${{ github.workspace }}/pytest-coverage.txt
       - name: Check for test failures
         if: ${{ failure() }}
         run: |
