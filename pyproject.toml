@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Async I/O modbus API for Remeha appliances"
 readme = "README.md"
 authors = [
-    { name = "houthacker", email = "houthacker@pm.me" }
+    { name = "houthacker"  }
 ]
 requires-python = ">=3.14"
 classifiers = [
@@ -32,8 +32,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "build>=1.5.0",
     "freezegun>=1.5.5",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "twine>=6.2.0",
 ]
