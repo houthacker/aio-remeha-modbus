@@ -4,9 +4,18 @@ from datetime import date, time
 from unittest.mock import patch
 
 import pytest
-from homeassistant.const import UnitOfTemperature
 
-from custom_components.remeha_modbus.api.schedule import (
+from aio_remeha_modbus.api.const import (
+    AUTO_SCHEDULE_DEFAULT_ID,
+    WEEKDAY_TO_MODBUS_VARIABLE,
+    BoilerConfiguration,
+    BoilerEnergyLabel,
+    PVSystem,
+    PVSystemOrientation,
+    UnitOfTemperature,
+    Weekday,
+)
+from aio_remeha_modbus.api.schedule import (
     ClimateZoneScheduleId,
     HourlyForecast,
     Timeslot,
@@ -15,23 +24,16 @@ from custom_components.remeha_modbus.api.schedule import (
     WeatherForecast,
     ZoneSchedule,
 )
-from custom_components.remeha_modbus.const import (
-    AUTO_SCHEDULE_DEFAULT_ID,
-    WEEKDAY_TO_MODBUS_VARIABLE,
-    BoilerConfiguration,
-    BoilerEnergyLabel,
-    PVSystem,
-    PVSystemOrientation,
-    Weekday,
-)
-from custom_components.remeha_modbus.helpers.modbus import from_registers
-from tests.conftest import get_api
+from aio_remeha_modbus.helpers.modbus import from_registers
+from tests.conftest import get_api, json_fixture
 
 
 def test_decode_time_schedule():
     """Test decoding a binary schedule."""
 
-    encoded_schedule: bytes = bytes.fromhex("05 c810 24 c830 2a c820 36 c840 60 c800 87 0000 0000")
+    encoded_schedule: bytes = bytes.fromhex(
+        "05 c810 24 c830 2a c820 36 c840 60 c800 87 0000 0000"
+    )
     schedule = ZoneSchedule.decode(
         id=ClimateZoneScheduleId.SCHEDULE_3,
         zone_id=1,
@@ -76,12 +78,16 @@ def test_decode_time_schedule_from_registers():
 
     registers: list[int] = [1480, 12336, 51232, 14024, 4174, 51264, 27848, 135, 0, 0]
     data = from_registers(
-        registers=registers, destination_variable=WEEKDAY_TO_MODBUS_VARIABLE[Weekday.FRIDAY]
+        registers=registers,
+        destination_variable=WEEKDAY_TO_MODBUS_VARIABLE[Weekday.FRIDAY],
     )
     assert isinstance(data, bytes)
     assert data == bytes.fromhex("05 c83030 c82036 c8104e c8406c c80087 00000000")
     actual: ZoneSchedule = ZoneSchedule.decode(
-        id=ClimateZoneScheduleId.SCHEDULE_1, zone_id=1, day=Weekday.FRIDAY, encoded_schedule=data
+        id=ClimateZoneScheduleId.SCHEDULE_1,
+        zone_id=1,
+        day=Weekday.FRIDAY,
+        encoded_schedule=data,
     )
 
     assert actual == ZoneSchedule(
@@ -160,13 +166,17 @@ def test_encode_time_schedule():
     assert schedule.encode() == expected
 
 
-@pytest.mark.parametrize("json_fixture", ["weather_forecast.json"], indirect=True)
-async def test_generate_dhw_time_schedule(json_fixture, mock_modbus_client):
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
+async def test_generate_dhw_time_schedule(mock_modbus_client):
     """Test generating a time schedule for heating the DHW boiler."""
 
     weather_forecast: WeatherForecast = WeatherForecast(
         unit_of_temperature=UnitOfTemperature.CELSIUS,
-        forecasts=[HourlyForecast.from_dict(native_forecast) for native_forecast in json_fixture],
+        forecasts=[
+            HourlyForecast.from_dict(native_forecast)
+            for native_forecast in json_fixture("weather_forecast.json")
+        ],
     )
 
     pv_system: PVSystem = PVSystem(
@@ -183,7 +193,7 @@ async def test_generate_dhw_time_schedule(json_fixture, mock_modbus_client):
 
     api = get_api(mock_modbus_client=mock_modbus_client)
     with patch(
-        "custom_components.remeha_modbus.api.RemehaApi.create",
+        "aio_remeha_modbus.api.api.RemehaApi.create",
         new=lambda *args, **kwargs: api,
     ):
         appliance = await api.async_read_appliance()
@@ -233,13 +243,17 @@ async def test_generate_dhw_time_schedule(json_fixture, mock_modbus_client):
         )
 
 
-@pytest.mark.parametrize("json_fixture", ["weather_forecast_no_sun.json"], indirect=True)
-async def test_generate_dhw_time_schedule_without_solar_yield(json_fixture, mock_modbus_client):
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
+async def test_generate_dhw_time_schedule_without_solar_yield(mock_modbus_client):
     """Test generating a time schedule for heating the DHW boiler on a day there is no solar yield."""
 
     weather_forecast: WeatherForecast = WeatherForecast(
         unit_of_temperature=UnitOfTemperature.CELSIUS,
-        forecasts=[HourlyForecast.from_dict(native_forecast) for native_forecast in json_fixture],
+        forecasts=[
+            HourlyForecast.from_dict(native_forecast)
+            for native_forecast in json_fixture("weather_forecast_no_sun.json")
+        ],
     )
 
     pv_system: PVSystem = PVSystem(
@@ -256,7 +270,7 @@ async def test_generate_dhw_time_schedule_without_solar_yield(json_fixture, mock
 
     api = get_api(mock_modbus_client=mock_modbus_client)
     with patch(
-        "custom_components.remeha_modbus.api.RemehaApi.create",
+        "aio_remeha_modbus.api.api.RemehaApi.create",
         new=lambda *args, **kwargs: api,
     ):
         appliance = await api.async_read_appliance()

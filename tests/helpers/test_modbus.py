@@ -4,12 +4,12 @@ from datetime import datetime
 
 from dateutil import tz
 
-from custom_components.remeha_modbus.const import (
+from aio_remeha_modbus.api.const import (
     ClimateZoneHeatingMode,
     DeviceInstanceRegisters,
     ZoneRegisters,
 )
-from custom_components.remeha_modbus.helpers import gtw08, modbus
+from aio_remeha_modbus.helpers import gtw08, modbus
 
 
 def test_to_registers_happy_path():
@@ -21,9 +21,9 @@ def test_to_registers_happy_path():
     ) == [201]
 
     # UINT16, scale 0.01
-    assert modbus.to_registers(source_variable=ZoneRegisters.DHW_TANK_TEMPERATURE, value=52.3) == [
-        5230
-    ]
+    assert modbus.to_registers(
+        source_variable=ZoneRegisters.DHW_TANK_TEMPERATURE, value=52.3
+    ) == [5230]
 
     # ENUM8
     assert modbus.to_registers(
@@ -32,7 +32,9 @@ def test_to_registers_happy_path():
     ) == [ClimateZoneHeatingMode.COOLING.value]
 
     # STRING(3)
-    assert modbus.to_registers(source_variable=ZoneRegisters.SHORT_NAME, value="DHW") == [
+    assert modbus.to_registers(
+        source_variable=ZoneRegisters.SHORT_NAME, value="DHW"
+    ) == [
         int.from_bytes(b"\x44\x48"),
         int.from_bytes(b"\x57\x00"),
     ]
@@ -49,7 +51,8 @@ def test_to_registers_happy_path():
 
     # CIA_301_TIME_OF_DAY, bytes
     assert modbus.to_registers(
-        source_variable=ZoneRegisters.END_TIME_MODE_CHANGE, value=b"\xc5\x00\x03\xdc\x3a\xf5"
+        source_variable=ZoneRegisters.END_TIME_MODE_CHANGE,
+        value=b"\xc5\x00\x03\xdc\x3a\xf5",
     ) == [
         int.from_bytes(b"\xc5\x00"),
         int.from_bytes(b"\x03\xdc"),
@@ -57,7 +60,9 @@ def test_to_registers_happy_path():
     ]
 
     # CIA_301_TIME_OF_DAY, None
-    assert modbus.to_registers(source_variable=ZoneRegisters.END_TIME_MODE_CHANGE, value=None) == [
+    assert modbus.to_registers(
+        source_variable=ZoneRegisters.END_TIME_MODE_CHANGE, value=None
+    ) == [
         int.from_bytes(b"\xff\x00"),
         int.from_bytes(b"\xff\x00"),
         int.from_bytes(b"\xff\x00"),

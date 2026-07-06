@@ -46,19 +46,18 @@ from aio_remeha_modbus.api.const import (
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
+    ConnectionType,
     DataType,
+    DeviceInstanceRegisters,
+    MetaRegisters,
     ModbusVariableDescription,
     Weekday,
+    ZoneRegisters,
 )
 from aio_remeha_modbus.api.errors import (
     DiscoveryTableCorruptedError,
     InvalidZoneSchedule,
     RemehaModbusError,
-)
-from aio_remeha_modbus.api.registers import (
-    DeviceInstanceRegisters,
-    MetaRegisters,
-    ZoneRegisters,
 )
 from aio_remeha_modbus.api.schedule import ZoneSchedule
 from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, TimeOfDay
@@ -205,22 +204,6 @@ class DeviceInstance:
     def __hash__(self):
         """Return a hash of this device instance."""
         return hash((self.id, self.board_category))
-
-
-class ConnectionType(StrEnum):
-    """Defines the type of modbus connection."""
-
-    TCP = auto()
-    """TCP/IP connection with socket framer, used with Ethernet enabled devices."""
-
-    UDP = auto()
-    """UDP connection with socker framer."""
-
-    RTU_OVER_TCP = "rtuovertcp"
-    """TCP/IP connection with RTU framer, used when connecting to modbus forwarders."""
-
-    SERIAL = auto()
-    """Serial connection with RTU framer, used with TTY port or USB rs485 converter."""
 
 
 class SerialConnectionMethod(StrEnum):

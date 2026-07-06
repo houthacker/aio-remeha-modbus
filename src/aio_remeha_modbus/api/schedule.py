@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 from dateutil import parser
 
-from aio_remeha_modbus.api.config import BoilerConfiguration
 from aio_remeha_modbus.api.const import (
     AUTO_SCHEDULE_MINIMAL_END_HOUR,
     BOILER_MAX_ALLOWED_HEAT_DURATION,
@@ -18,6 +17,7 @@ from aio_remeha_modbus.api.const import (
     PV_MAX_TILT_DEGREES,
     REMEHA_TIME_PROGRAM_BYTE_SIZE,
     WATER_SPECIFIC_HEAT_CAPACITY_KJ,
+    BoilerConfiguration,
     BoilerEnergyLabel,
     ClimateZoneScheduleId,
     ForecastField,

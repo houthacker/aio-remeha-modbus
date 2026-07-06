@@ -4,13 +4,12 @@ from datetime import datetime, time
 
 import pytest
 from pymodbus import ModbusException
-from tests.conftest import get_api
 
-from aio_remeha_modbus.api import (
+from aio_remeha_modbus.api.api import (
     ConnectionType,
     DeviceInstance,
+    RemehaApi,
 )
-from aio_remeha_modbus.api.api import RemehaApi
 from aio_remeha_modbus.api.appliance import (
     Appliance,
     ApplianceErrorPriority,
@@ -26,12 +25,12 @@ from aio_remeha_modbus.api.const import (
     ClimateZoneScheduleId,
     ClimateZoneType,
     DataType,
+    MetaRegisters,
     ModbusVariableDescription,
     Weekday,
     ZoneRegisters,
 )
 from aio_remeha_modbus.api.errors import DiscoveryTableCorruptedError
-from aio_remeha_modbus.api.registers import MetaRegisters
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
@@ -39,9 +38,11 @@ from aio_remeha_modbus.api.schedule import (
     ZoneSchedule,
 )
 from aio_remeha_modbus.helpers.modbus import to_gtw08_null_value
-from tests.helpers.registers import SENSOR_REGISTERS
+from tests.conftest import get_api
+from tests.util.registers import SENSOR_REGISTERS
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_retries_on_timeout(mock_modbus_client):
     """A transient modbus timeout on a read is retried instead of failing the read.
@@ -70,6 +71,7 @@ async def test_read_retries_on_timeout(mock_modbus_client):
     assert state["raised"] is True
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_api_properties(mock_modbus_client):
     """Test the modbus hub name."""
@@ -80,6 +82,7 @@ async def test_api_properties(mock_modbus_client):
     assert await api.async_is_connected  # Always True for mocked api
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_api_connection(mock_modbus_client):
     """Test connecting to the modbus device."""
@@ -91,6 +94,7 @@ async def test_api_connection(mock_modbus_client):
         await api.async_close()
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_single_variable(mock_modbus_client):
     """Test that the API can be created and a single register be read."""
@@ -99,6 +103,7 @@ async def test_read_single_variable(mock_modbus_client):
     assert await api.async_read_number_of_device_instances() == 2
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_device_instance(mock_modbus_client):
     """Test that a device can be read through the modbus interface."""
@@ -113,6 +118,7 @@ async def test_read_device_instance(mock_modbus_client):
     assert device.article_number == 7853960
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_device_instances(mock_modbus_client):
     """Read all devices through the modbus interface."""
@@ -123,6 +129,7 @@ async def test_read_device_instances(mock_modbus_client):
     assert len(devices) == 2
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_sensor_values(mock_modbus_client):
     """Read values for a given list of variables that are configured as sensors."""
@@ -160,6 +167,7 @@ async def test_read_sensor_values(mock_modbus_client):
     )
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_zone(mock_modbus_client):
     """Read a single zone."""
@@ -192,6 +200,7 @@ async def test_read_zone(mock_modbus_client):
     assert zone.is_domestic_hot_water() is False
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_not_present_zone(mock_modbus_client):
     """Read a zone that is of ZoneType.NOT_PRESENT."""
@@ -203,6 +212,7 @@ async def test_read_not_present_zone(mock_modbus_client):
     )
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_zone_update(mock_modbus_client):
     """Read a zone update from the modbus device."""
@@ -235,6 +245,7 @@ async def test_read_zone_update(mock_modbus_client):
     assert updated_zone.current_setpoint == new_setpoint
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_health_check(mock_modbus_client):
     """Test a health check can be run without raising an exception."""
@@ -243,6 +254,7 @@ async def test_health_check(mock_modbus_client):
     await api.async_health_check()
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_zones(mock_modbus_client):
     """Read all zones through the modbus interface."""
@@ -255,6 +267,7 @@ async def test_read_zones(mock_modbus_client):
     assert len(zones) == 2
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_zones_fallback(mock_modbus_client):
     """Read all zones while register 189 (NumberOfZones) is invalid."""
@@ -275,6 +288,7 @@ async def test_read_zones_fallback(mock_modbus_client):
             await api.async_read_zones(await api.async_read_appliance())
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_write_variable(mock_modbus_client):
     """Test that the API can write a single register."""
@@ -317,6 +331,8 @@ async def test_write_variable(mock_modbus_client):
         )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_read_appliance(mock_modbus_client):
     """Test that the API can read the appliance status from the modbus device."""
 
@@ -350,6 +366,8 @@ async def test_read_appliance(mock_modbus_client):
     assert status.cooling_active
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
 async def test_write_zone_schedule(mock_modbus_client):
     """Test that a time program can be written to the modbus device."""
 

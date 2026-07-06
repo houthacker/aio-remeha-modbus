@@ -2,8 +2,11 @@
 
 from typing import Final
 
-from aio_remeha_modbus.api.const import ModbusVariableDescription
-from aio_remeha_modbus.api.registers import HybridRegisters, MetaRegisters
+from aio_remeha_modbus.api.const import (
+    HybridRegisters,
+    MetaRegisters,
+    ModbusVariableDescription,
+)
 
 SENSOR_REGISTERS: Final[list[ModbusVariableDescription]] = [
     MetaRegisters.CURRENT_ERROR,

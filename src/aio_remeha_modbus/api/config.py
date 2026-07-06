@@ -1,12 +1,11 @@
 """Configuration clases"""
 
-from typing import Final, Literal
+from typing import Literal
 
 from pydantic.dataclasses import dataclass
 from pymodbus import FramerType
 
-from aio_remeha_modbus.api.api import ConnectionType
-from aio_remeha_modbus.api.const import BoilerEnergyLabel
+from aio_remeha_modbus.api.const import ConnectionType
 
 
 @dataclass
@@ -74,17 +73,3 @@ class UdpConfiguration(Configuration):
 
     timeout: int = 120
     """Response timeout in seconds."""
-
-
-@dataclass(frozen=True)
-class BoilerConfiguration:
-    """The configuration of a DHW boiler."""
-
-    volume: Final[float | None]
-    """The volume of the boiler in m³"""
-
-    heat_loss_rate: Final[float | None]
-    """The heat loss rate in Watt"""
-
-    energy_label: Final[BoilerEnergyLabel | None]
-    """The boiler energy label, if the heat loss rate is not available."""

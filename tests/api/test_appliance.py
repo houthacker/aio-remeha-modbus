@@ -2,7 +2,7 @@
 
 from datetime import time
 
-from custom_components.remeha_modbus.api.appliance import (
+from aio_remeha_modbus.api.appliance import (
     Appliance,
     ApplianceErrorPriority,
     ApplianceStatus,
