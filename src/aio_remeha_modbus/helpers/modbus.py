@@ -5,7 +5,7 @@ from typing import Any, Final, cast
 
 from pymodbus.client.mixin import ModbusClientMixin
 
-from custom_components.remeha_modbus.const import DataType, ModbusVariableDescription
+from aio_remeha_modbus.api.const import DataType, ModbusVariableDescription
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -14,7 +14,9 @@ NULL_VALUES: Final[dict[DataType, int | bytes]] = {
     DataType.UINT16: int.from_bytes(b"\xff\xff"),
     DataType.UINT32: int.from_bytes(b"\xff\xff\xff\xff"),
     DataType.INT16: int.from_bytes(b"\x80\x00", signed=True),
-    DataType.INT32: int.from_bytes(b"\x80\x00\x00\x00", signed=True, byteorder="little"),
+    DataType.INT32: int.from_bytes(
+        b"\x80\x00\x00\x00", signed=True, byteorder="little"
+    ),
     DataType.CIA_301_TIME_OF_DAY: b"\xff\x00\xff\x00\xff\x00",
     DataType.ZONE_TIME_PROGRAM: b"\xff\x00\xff\x00\xff\x00\xff\x00\xff\x00\xff\x00\xff\x00\xff\x00\xff\x00\xff\x00",
 }
@@ -37,9 +39,13 @@ HA_TO_PYMODBUS_TYPE: Final[dict[DataType, ModbusClientMixin.DATATYPE]] = {
 type ModbusPrimitive = int | float | str | list[bool] | list[int] | list[float]
 
 
-def _is_gtw08_null_value(variable: ModbusVariableDescription, val: ModbusPrimitive | bytes) -> bool:
+def _is_gtw08_null_value(
+    variable: ModbusVariableDescription, val: ModbusPrimitive | bytes
+) -> bool:
     return (
-        val == NULL_VALUES[variable.data_type] if variable.data_type in NULL_VALUES else val is None
+        val == NULL_VALUES[variable.data_type]
+        if variable.data_type in NULL_VALUES
+        else val is None
     )
 
 
@@ -54,7 +60,8 @@ def _from_registers(
     # If variable requires a bytes result, use our own conversion since the ModbusClientMixin doesn't support them.
     val = (
         bytes_from_registers(registers=registers)
-        if variable.data_type in [DataType.CIA_301_TIME_OF_DAY, DataType.ZONE_TIME_PROGRAM]
+        if variable.data_type
+        in [DataType.CIA_301_TIME_OF_DAY, DataType.ZONE_TIME_PROGRAM]
         else ModbusClientMixin.convert_from_registers(
             registers=registers, data_type=HA_TO_PYMODBUS_TYPE[variable.data_type]
         )

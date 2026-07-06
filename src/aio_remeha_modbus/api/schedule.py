@@ -8,28 +8,27 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Self, cast
 
 from dateutil import parser
-from homeassistant.const import UnitOfTemperature
 
-from custom_components.remeha_modbus.const import (
+from aio_remeha_modbus.api.config import BoilerConfiguration
+from aio_remeha_modbus.api.const import (
     AUTO_SCHEDULE_MINIMAL_END_HOUR,
     BOILER_MAX_ALLOWED_HEAT_DURATION,
-    DOMAIN,
     MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL,
     PV_EFFICIENCY_TABLE,
     PV_MAX_TILT_DEGREES,
     REMEHA_TIME_PROGRAM_BYTE_SIZE,
     WATER_SPECIFIC_HEAT_CAPACITY_KJ,
-    BoilerConfiguration,
     BoilerEnergyLabel,
     ClimateZoneScheduleId,
     ForecastField,
     PVSystem,
+    UnitOfTemperature,
     Weekday,
 )
-from custom_components.remeha_modbus.const import REMEHA_TIME_PROGRAM_SLOT_SIZE as SLOT_SIZE
-from custom_components.remeha_modbus.errors import AutoSchedulingError
-from custom_components.remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
-from custom_components.remeha_modbus.helpers.iterators import consecutive_groups
+from aio_remeha_modbus.api.const import REMEHA_TIME_PROGRAM_SLOT_SIZE as SLOT_SIZE
+from aio_remeha_modbus.api.errors import AutoSchedulingError
+from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+from aio_remeha_modbus.helpers.iterators import consecutive_groups
 
 from .appliance import SeasonalMode
 
@@ -261,13 +260,22 @@ class ZoneSchedule:
         return b"".join(
             [
                 not_padded_slots,
-                *[b"\00" for _ in range(REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots))],
+                *[
+                    b"\00"
+                    for _ in range(
+                        REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots)
+                    )
+                ],
             ]
         )
 
     @classmethod
     def decode(
-        cls, id: ClimateZoneScheduleId, zone_id: int, day: Weekday, encoded_schedule: bytes
+        cls,
+        id: ClimateZoneScheduleId,
+        zone_id: int,
+        day: Weekday,
+        encoded_schedule: bytes,
     ) -> Self:
         """Decode a `bytes` object containing the schedule into a `ZoneSchedule`.
 
@@ -290,11 +298,15 @@ class ZoneSchedule:
 
         def _generate_timeslots():
             for slot_index in range(1, no_of_slots * SLOT_SIZE, SLOT_SIZE):
-                slot_bytes: bytes = encoded_schedule[slot_index : slot_index + SLOT_SIZE]
+                slot_bytes: bytes = encoded_schedule[
+                    slot_index : slot_index + SLOT_SIZE
+                ]
 
                 yield Timeslot.decode(encoded_time_slot=slot_bytes)
 
-        return cls(id=id, zone_id=zone_id, day=day, time_slots=list(_generate_timeslots()))
+        return cls(
+            id=id, zone_id=zone_id, day=day, time_slots=list(_generate_timeslots())
+        )
 
     @classmethod
     def create_default(
@@ -326,7 +338,9 @@ class ZoneSchedule:
             time_slots=[
                 Timeslot(
                     setpoint_type=TimeslotSetpointType.ECO,
-                    activity=TimeslotActivity.DHW if is_dhw else TimeslotActivity.HEAT_COOL,
+                    activity=TimeslotActivity.DHW
+                    if is_dhw
+                    else TimeslotActivity.HEAT_COOL,
                     switch_time=datetime.time(hour=0),
                 )
             ],
@@ -359,16 +373,13 @@ class ZoneSchedule:
         _LOGGER.info("Generating ZoneSchedule for tomorrow...")
 
         if not weather_forecast.forecasts:
-            raise AutoSchedulingError(
-                translation_domain=DOMAIN, translation_key="auto_schedule_no_forecasts"
-            )
+            raise AutoSchedulingError(translation_key="auto_schedule_no_forecasts")
 
         # We want to generate a planning for the next whole day, which must, to be useful,
         # end no earlier than `AUTO_SCHEDULE_MINIMAL_END_HOUR`.
         last_forecast: HourlyForecast = weather_forecast.forecasts[-1]
         if last_forecast.start_time.hour < AUTO_SCHEDULE_MINIMAL_END_HOUR:
             raise AutoSchedulingError(
-                translation_domain=DOMAIN,
                 translation_key="auto_schedule_forecast_not_enough_hours",
                 translation_placeholders={
                     "max_forecast_time": f"{last_forecast.start_time.hour}:00",
@@ -403,7 +414,8 @@ class ZoneSchedule:
         cooling_time_hours: int = int(
             (
                 datetime.datetime.combine(
-                    datetime.date.today() + datetime.timedelta(days=1), datetime.time(hour=8)
+                    datetime.date.today() + datetime.timedelta(days=1),
+                    datetime.time(hour=8),
                 )
                 - datetime.datetime.now()
             ).total_seconds()
@@ -419,7 +431,9 @@ class ZoneSchedule:
         )
 
         # Emit a warning if the required energy to heat it up again in the morning is too large.
-        required_heating_kwh_after_cooling: float = (heat_loss_rate * cooling_time_hours) / 1000
+        required_heating_kwh_after_cooling: float = (
+            heat_loss_rate * cooling_time_hours
+        ) / 1000
         if required_heating_kwh_after_cooling > default_required_heating_kwh:
             _LOGGER.warning(
                 "DHW boiler is likely going to heat up at night, outside of planning schedule."
@@ -466,14 +480,18 @@ class ZoneSchedule:
             )
             pv_efficiency *= (100 - decreased_percent) / 100
             _LOGGER.debug(
-                "PV efficiency is %.2f after applying annual efficiency decrease", pv_efficiency
+                "PV efficiency is %.2f after applying annual efficiency decrease",
+                pv_efficiency,
             )
 
         # This results in a forecasted yield in kWh for all of the 24 hrs
         forecasted_kwh_yield: dict[int, int] = {
             fc.start_time.hour: int(
                 (
-                    (cast(int, fc.solar_irradiance) / MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL)
+                    (
+                        cast(int, fc.solar_irradiance)
+                        / MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL
+                    )
                     * pv_system.nominal_power
                     * pv_efficiency
                 )
@@ -495,7 +513,9 @@ class ZoneSchedule:
                 )
 
                 # Calculate the total yield in kwh for the 3-hour block
-                total_yield: int = sum([forecasted_kwh_yield.get(h, 0) for h in hours_subset])
+                total_yield: int = sum(
+                    [forecasted_kwh_yield.get(h, 0) for h in hours_subset]
+                )
 
                 if total_yield >= default_required_heating_kwh:
                     # Only yield the subset if it is a closed range
@@ -507,7 +527,9 @@ class ZoneSchedule:
 
         # Take two timeslots, allowing for both morning- and afternoon heating.
         # If no timeslots are available, use all usable hours: heating is allowed at any time during the day.
-        acceptable_hour_blocks: list[list[int]] = list(_generate_acceptable_hour_blocks())
+        acceptable_hour_blocks: list[list[int]] = list(
+            _generate_acceptable_hour_blocks()
+        )
         accepted_hour_blocks: list[list[int]] = (
             (
                 [acceptable_hour_blocks[0]]
@@ -570,7 +592,8 @@ class ZoneSchedule:
 
 
 def get_current_timeslot(
-    schedule: dict[Weekday, ZoneSchedule | None] | None, time_zone: datetime.tzinfo | None
+    schedule: dict[Weekday, ZoneSchedule | None] | None,
+    time_zone: datetime.tzinfo | None,
 ) -> Timeslot | None:
     """Retrieve the current schedule time slot.
 
@@ -622,4 +645,6 @@ def is_cooling_schedule(
     now: datetime.datetime = datetime.datetime.now(time_zone)
     day_schedule = schedule.get(Weekday(now.weekday()))
 
-    return day_schedule.id == ClimateZoneScheduleId.SCHEDULE_4 if day_schedule else False
+    return (
+        day_schedule.id == ClimateZoneScheduleId.SCHEDULE_4 if day_schedule else False
+    )

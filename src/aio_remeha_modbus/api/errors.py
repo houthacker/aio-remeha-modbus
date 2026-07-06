@@ -1,11 +1,42 @@
 """Remeha Modbus API exceptions."""
 
-from pymodbus import ModbusException
+from enum import Enum
 
 from aio_remeha_modbus.api.const import ClimateZoneScheduleId
 
+type Placeholders = dict[str, str | int | bool | Enum | Placeholders]
+"""Type declaration for placeholders in a translateable error."""
 
-class DiscoveryTableCorruptedError(ModbusException):
+
+class RemehaApiError(Exception):
+    """Base class for Remeha Modbus API exceptions."""
+
+    translation_key: str
+    """The key used to look up translations of this error."""
+
+    translation_placeholders: Placeholders
+    """Placeholders for values within the error message."""
+
+    def __init__(
+        self,
+        translation_key: str,
+        translation_placeholders: Placeholders = {},
+    ) -> None:
+        super().__init__()
+
+        self.translation_key = translation_key
+        self.translation_placeholders = translation_placeholders
+
+
+class RemehaModbusError(RemehaApiError):
+    """Base class for translateable modbus exceptions."""
+
+
+class AutoSchedulingError(RemehaApiError):
+    """Exception to indicate an error occurred while auto scheduling."""
+
+
+class DiscoveryTableCorruptedError(RemehaModbusError):
     """Exception to indicate the modbus discovery table seems corrupted.
 
     This happens for example if the number of devices is 0 or None.
@@ -13,7 +44,7 @@ class DiscoveryTableCorruptedError(ModbusException):
     """
 
 
-class InvalidZoneSchedule(Exception):
+class InvalidZoneSchedule(RemehaApiError):
     """API exception to indicate that an invalid zone schedule was read from modbus.
 
     This exception is raised when the encoded zone schedule bytes are
@@ -32,7 +63,14 @@ class InvalidZoneSchedule(Exception):
             is_dhw (bool): Whether the related zone is a DHW zone.
 
         """
-        super().__init__(*args)
+        super().__init__(
+            translation_key="invalid_zone_schedule",
+            translation_placeholders={
+                "zone": zone,
+                "schedule_id": schedule_id.name,
+                "is_dhw": is_dhw,
+            },
+        )
 
         self._zone = zone
         self._schedule_id = schedule_id

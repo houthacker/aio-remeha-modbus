@@ -4,41 +4,42 @@ from datetime import datetime, time
 
 import pytest
 from pymodbus import ModbusException
+from tests.conftest import get_api
 
-from custom_components.remeha_modbus.api import (
+from aio_remeha_modbus.api import (
     ConnectionType,
     DeviceInstance,
 )
-from custom_components.remeha_modbus.api.appliance import (
+from aio_remeha_modbus.api.api import RemehaApi
+from aio_remeha_modbus.api.appliance import (
     Appliance,
     ApplianceErrorPriority,
     ApplianceStatus,
     CoolingType,
     SilentMode,
 )
-from custom_components.remeha_modbus.api.climate_zone import ClimateZone
-from custom_components.remeha_modbus.api.schedule import (
-    Timeslot,
-    TimeslotActivity,
-    TimeslotSetpointType,
-    ZoneSchedule,
-)
-from custom_components.remeha_modbus.const import (
-    REMEHA_SENSORS,
+from aio_remeha_modbus.api.climate_zone import ClimateZone
+from aio_remeha_modbus.api.const import (
     ClimateZoneFunction,
     ClimateZoneHeatingMode,
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
     DataType,
-    MetaRegisters,
     ModbusVariableDescription,
     Weekday,
     ZoneRegisters,
 )
-from custom_components.remeha_modbus.errors import DiscoveryTableCorruptedError
-from custom_components.remeha_modbus.helpers.modbus import to_gtw08_null_value
-from tests.conftest import get_api
+from aio_remeha_modbus.api.errors import DiscoveryTableCorruptedError
+from aio_remeha_modbus.api.registers import MetaRegisters
+from aio_remeha_modbus.api.schedule import (
+    Timeslot,
+    TimeslotActivity,
+    TimeslotSetpointType,
+    ZoneSchedule,
+)
+from aio_remeha_modbus.helpers.modbus import to_gtw08_null_value
+from tests.helpers.registers import SENSOR_REGISTERS
 
 
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
@@ -126,11 +127,11 @@ async def test_read_device_instances(mock_modbus_client):
 async def test_read_sensor_values(mock_modbus_client):
     """Read values for a given list of variables that are configured as sensors."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    v = await api.async_read_sensor_values(descriptions=list(REMEHA_SENSORS.keys()))
+    api: RemehaApi = get_api(mock_modbus_client=mock_modbus_client)
+    v = await api.async_read_sensor_values(descriptions=SENSOR_REGISTERS)
     assert v == dict(
         zip(
-            REMEHA_SENSORS.keys(),
+            SENSOR_REGISTERS,
             [
                 int("0223", 16),
                 3,
@@ -196,7 +197,10 @@ async def test_read_not_present_zone(mock_modbus_client):
     """Read a zone that is of ZoneType.NOT_PRESENT."""
     api = get_api(mock_modbus_client=mock_modbus_client)
 
-    assert await api.async_read_zone(id=3, appliance=await api.async_read_appliance()) is None
+    assert (
+        await api.async_read_zone(id=3, appliance=await api.async_read_appliance())
+        is None
+    )
 
 
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
@@ -244,7 +248,9 @@ async def test_read_zones(mock_modbus_client):
     """Read all zones through the modbus interface."""
 
     api = get_api(mock_modbus_client=mock_modbus_client)
-    zones: list[ClimateZone] = await api.async_read_zones(await api.async_read_appliance())
+    zones: list[ClimateZone] = await api.async_read_zones(
+        await api.async_read_appliance()
+    )
 
     assert len(zones) == 2
 
@@ -255,7 +261,10 @@ async def test_read_zones_fallback(mock_modbus_client):
 
     api = get_api(mock_modbus_client=mock_modbus_client)
 
-    for number_of_zones in [0, to_gtw08_null_value(MetaRegisters.NUMBER_OF_ZONES.data_type)]:
+    for number_of_zones in [
+        0,
+        to_gtw08_null_value(MetaRegisters.NUMBER_OF_ZONES.data_type),
+    ]:
         # Set NumberOfZones
         await mock_modbus_client.write_registers(
             MetaRegisters.NUMBER_OF_ZONES.start_address, [number_of_zones]

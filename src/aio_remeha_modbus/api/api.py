@@ -8,13 +8,6 @@ from datetime import datetime, tzinfo
 from enum import Enum, StrEnum, auto
 from typing import Any, Self, cast
 
-from custom_components.remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, TimeOfDay
-from custom_components.remeha_modbus.helpers.modbus import (
-    ModbusPrimitive,
-    bytes_from_registers,
-    from_registers,
-    to_registers,
-)
 from pymodbus import FramerType, ModbusException
 from pymodbus import client as ModbusClient
 from pymodbus.client import (
@@ -60,6 +53,7 @@ from aio_remeha_modbus.api.const import (
 from aio_remeha_modbus.api.errors import (
     DiscoveryTableCorruptedError,
     InvalidZoneSchedule,
+    RemehaModbusError,
 )
 from aio_remeha_modbus.api.registers import (
     DeviceInstanceRegisters,
@@ -67,6 +61,13 @@ from aio_remeha_modbus.api.registers import (
     ZoneRegisters,
 )
 from aio_remeha_modbus.api.schedule import ZoneSchedule
+from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, TimeOfDay
+from aio_remeha_modbus.helpers.modbus import (
+    ModbusPrimitive,
+    bytes_from_registers,
+    from_registers,
+    to_registers,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -347,7 +348,7 @@ class RemehaApi:
             A tuple containing values unpacked according to the format string.
 
         Raises:
-            ModbusException: if a modbus error occurred while reading the registers.
+            RemehaModbusError: if a modbus error occurred while reading the registers.
             struct.error: if `struct_format` is an illegal struct format.
 
         """
@@ -356,9 +357,7 @@ class RemehaApi:
             address=start_register, count=register_count, device_id=self._device_address
         )
         if response.isError():
-            raise ModbusException(
-                "Modbus device returned an error while reading holding registers."
-            )
+            raise RemehaModbusError("device_error")
 
         return struct.unpack(
             struct_format, bytes_from_registers(registers=response.registers)
@@ -402,7 +401,7 @@ class RemehaApi:
             list[int]: The requested registers.
 
         Raises:
-            ModbusException: If the connection to the modbus device is lost or if the request fails.
+            RemehaModbusError: If the connection to the modbus device is lost or if the request fails.
             ValueError: If the required register count cannot be calculated.
 
         """
@@ -410,11 +409,11 @@ class RemehaApi:
         async def _async_ensure_connected() -> None:
             """Ensure that we're connected or raise an exception."""
             if not self._client.connected and not await self._client.connect():
-                raise ModbusException("Connection to modbus device lost.")
+                raise RemehaModbusError("connection_lost")
 
         address: int = variable.start_address + offset
         retries: int = 0
-        last_error: str = "unknown error"
+        last_error: int | ModbusException
         while retries < 3:
             await _async_ensure_connected()
 
@@ -430,13 +429,13 @@ class RemehaApi:
                 # it shares the appliance L-bus. Treat this as retryable so one slow reply
                 # doesn't fail the entire update cycle.
                 retries += 1
-                last_error = str(ex)
+                last_error = ex
                 await asyncio.sleep(0.001)
                 continue
 
             if response.isError():
                 retries += 1
-                last_error = f"error code {response.exception_code}"
+                last_error = response.exception_code
                 await asyncio.sleep(0.001)
             else:
                 if retries > 0:
@@ -446,9 +445,22 @@ class RemehaApi:
 
                 return response.registers
 
-        raise ModbusException(
-            f"Modbus device returned an error while reading registers at address {address} "
-            f"after {retries} retries: {last_error}."
+        if isinstance(last_error, ModbusException):
+            raise RemehaModbusError(
+                translation_key="read_error",
+                translation_placeholders={
+                    "address": address,
+                    "retries": retries,
+                },
+            ) from last_error
+
+        raise RemehaModbusError(
+            translation_key="read_error",
+            translation_placeholders={
+                "address": address,
+                "retries": retries,
+                "modbus_error_code": last_error,
+            },
         )
 
     async def _async_write_registers(
@@ -464,13 +476,13 @@ class RemehaApi:
             offset (int): The offset for `variable.start_address`, in registers. Used for zone and device info registers.
 
         Raises:
-            ModbusException: If the connection to the modbus device is lost or if the write request fails.
+            RemehaModbusError: If the connection to the modbus device is lost or if the write request fails.
 
         """
 
         async def _async_ensure_connected() -> None:
             if not self._client.connected and not await self._client.connect():
-                raise ModbusException("Connection to modbus device lost.")
+                raise RemehaModbusError("connection_lost")
 
         async with self._lock:
             await _async_ensure_connected()
@@ -480,8 +492,13 @@ class RemehaApi:
                 device_id=self._device_address,
             )
             if response.isError():
-                raise ModbusException(
-                    "Modbus device returned an error while writing registers."
+                raise RemehaModbusError(
+                    translation_key="device_error",
+                    translation_placeholders={
+                        "address": variable.start_address + offset,
+                        "retries": 0,
+                        "modbus_error_code": response.exception_code,
+                    },
                 )
 
     def _map_selected_schedule(
@@ -516,7 +533,7 @@ class RemehaApi:
         """Read the schedules for all weekdays.
 
         Raises:
-            `ValueError` if an error occurs when parsing the zone schedule.
+            ValueError: If an error occurs when parsing the zone schedule.
 
         """
 
@@ -556,15 +573,14 @@ class RemehaApi:
     async def async_health_check(self) -> None:
         """Attempt to check the system health by reading a single register (128 - numberOfDevices).
 
-        Raises
-        ------
-            `ModbusException` - if the health check is unsuccessful.
+        Raises:
+            RemehaModbusError: If the health check failed.
 
         """
         try:
             await self.async_read_number_of_device_instances()
         except ValueError as ex:
-            raise ModbusException("Modbus health check failed") from ex
+            raise RemehaModbusError("health_check_failed") from ex
 
         _LOGGER.debug("Modbus health check successful")
 
@@ -574,8 +590,8 @@ class RemehaApi:
         Returns
             `list[DeviceInstance]`: A list of all discovered device instances.
 
-        Raises
-            `ModbusException`: If the list of device instances cannot be obtained.
+        Raises:
+            RemehaModbusError: If the list of device instances cannot be obtained.
 
         """
 
@@ -592,12 +608,12 @@ class RemehaApi:
     async def async_read_number_of_device_instances(self) -> int:
         """Retrieve the number of available  device instances in the appliance.
 
-        Returns
+        Returns:
             `int`: The number of instances.
 
-        Raises
-            `ModbusException`: If the number of instances cannot be obtained.
-            `ValueError`: If the retrieved modbus data cannot be deserialized successfully.
+        Raises:
+            RemehaModbusError: If the number of instances cannot be obtained.
+            ValueError: If the retrieved modbus data cannot be deserialized successfully.
 
         """
 
@@ -632,7 +648,7 @@ class RemehaApi:
             `DeviceInst4ance`: The requested device instance
 
         Raises:
-            `ModbusException`: If the instance registers cannot be read.
+            `RemehaModbusError`: If the instance registers cannot be read.
             `ValueException`: If deserializing the registers to a `DeviceInstance` fails.
 
         """
@@ -695,7 +711,7 @@ class RemehaApi:
             `Appliance`: The appliance with its status fields.
 
         Raises:
-            `ModbusException`: If the appliance status fields cannot be obtained.
+            `RemehaModbusError`: If the appliance status fields cannot be obtained.
             `ValueError`: If the retrieved modbus data cannot be successfully deserialized.
 
         """
@@ -907,7 +923,7 @@ class RemehaApi:
         Raises:
             `DiscoveryTableCorruptedError`: If the modbus discovery table has been corrupted.
             `InvalidZoneSchedule`: If the climate zone is in scheduling mode but reading the schedule fails.
-            `ModbusException`: If the list of zones cannot be obtained.
+            `RemehaModbusError`: If the list of zones cannot be obtained.
             `ValueError`: If the retrieved modbus data cannot be successfully deserialized.
 
         """
@@ -932,7 +948,7 @@ class RemehaApi:
             `int | None`: The number of zones, or `None` if the modbus address is empty.
 
         Raises
-            `ModbusException`: If the number of zones cannot be obtained.
+            `RemehaModbusError`: If the number of zones cannot be obtained.
             `ValueError`: If the retrieved modbus data cannot be deserialized successfully.
 
         """
@@ -986,7 +1002,7 @@ class RemehaApi:
 
         Raises:
             `InvalidZoneSchedule`: If the zone is in scheduling mode and parsing the schedule fails.
-            `ModbusException`: If the zone registers cannot be read.
+            `RemehaModbusError`: If the zone registers cannot be read.
             `ValueError`: If deserializing the registers to a `ClimateZone` fails.
 
         """
@@ -1293,7 +1309,7 @@ class RemehaApi:
 
         Raises:
             `InvalidZoneSchedule`: If the zone is in scheduling mode and parsing the schedule fails.
-            `ModbusException`: If the zone update registers cannot be read.
+            `RemehaModbusError`: If the zone update registers cannot be read.
             `ValueError`: If deserializing any register fails.
 
         """
@@ -1537,7 +1553,7 @@ class RemehaApi:
             `ZoneSchedule`: The requested zone schedule, or `None` if it has not been configured.
 
         Raises:
-            `ModbusException`: If the required registers cannot be read.
+            `RemehaModbusError`: If the required registers cannot be read.
             `ValueError`: If deserializing the registers to a `ZoneSchedule` fails.
 
         """
@@ -1597,7 +1613,7 @@ class RemehaApi:
             offset (int): The offset in registers of `variable.start_address`. Used for zone-, device and schedule objects.
 
         Raises:
-            ModbusException: If the connection to the modbus device is lost or if the write request fails.
+            RemehaModbusError: If the connection to the modbus device is lost or if the write request fails.
             ValueError:
                 * If no conversion path exists between `variable.data_type` and `value`
                 * If conversion to a numeric type fails.

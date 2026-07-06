@@ -442,3 +442,14 @@ class ZoneRegisters:
         scale=0.01,
         friendly_name="CM040",
     )
+
+
+class HybridRegisters:
+    """Registers for hybrid appliances."""
+
+    COP_CALCULATED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=9230,
+        name="varHpCOPCalculated",
+        data_type=DataType.UINT16,
+        scale=0.001,
+    )

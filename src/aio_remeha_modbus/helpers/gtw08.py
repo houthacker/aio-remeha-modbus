@@ -5,7 +5,7 @@ from typing import Final
 
 from dateutil import relativedelta
 
-from custom_components.remeha_modbus.const import REMEHA_TIME_STEP_MINUTES
+from aio_remeha_modbus.api.const import REMEHA_TIME_STEP_MINUTES
 
 
 class SteppedTimeOfDay:
@@ -16,7 +16,9 @@ class SteppedTimeOfDay:
     """
 
     @classmethod
-    def from_steps(cls, steps: int, step_minutes: int = REMEHA_TIME_STEP_MINUTES) -> time:
+    def from_steps(
+        cls, steps: int, step_minutes: int = REMEHA_TIME_STEP_MINUTES
+    ) -> time:
         """Decode time steps to a time of day.
 
         Args:
@@ -29,7 +31,9 @@ class SteppedTimeOfDay:
         return time(delta.hours, delta.minutes, 0)
 
     @classmethod
-    def to_steps(cls, time_of_day: time, step_minutes: int = REMEHA_TIME_STEP_MINUTES) -> int:
+    def to_steps(
+        cls, time_of_day: time, step_minutes: int = REMEHA_TIME_STEP_MINUTES
+    ) -> int:
         """Encode a time of day to time steps since midnight.
 
         Args:
@@ -49,7 +53,9 @@ class SteppedTimeOfDay:
 class TimeOfDay:
     """Encoding to and decoding from a CiA 301 TIME_OF_DAY struct."""
 
-    _CIA301_TOD_BASE_DATE: Final[datetime] = datetime(year=1984, month=1, day=1, hour=0, minute=0)
+    _CIA301_TOD_BASE_DATE: Final[datetime] = datetime(
+        year=1984, month=1, day=1, hour=0, minute=0
+    )
 
     @classmethod
     def from_bytes(cls, data: bytes, time_zone: tzinfo | None = None) -> datetime:
