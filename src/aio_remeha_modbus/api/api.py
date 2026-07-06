@@ -6,10 +6,15 @@ import struct
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from enum import Enum, StrEnum, auto
-from types import MappingProxyType
 from typing import Any, Self, cast
 
-from homeassistant.const import CONF_HOST, CONF_PORT, CONF_TYPE
+from custom_components.remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, TimeOfDay
+from custom_components.remeha_modbus.helpers.modbus import (
+    ModbusPrimitive,
+    bytes_from_registers,
+    from_registers,
+    to_registers,
+)
 from pymodbus import FramerType, ModbusException
 from pymodbus import client as ModbusClient
 from pymodbus.client import (
@@ -20,7 +25,7 @@ from pymodbus.client import (
 )
 from pymodbus.pdu import ModbusPDU
 
-from custom_components.remeha_modbus.api.appliance import (
+from aio_remeha_modbus.api.appliance import (
     Appliance,
     ApplianceErrorPriority,
     ApplianceStatus,
@@ -28,43 +33,40 @@ from custom_components.remeha_modbus.api.appliance import (
     SeasonalMode,
     SilentMode,
 )
-from custom_components.remeha_modbus.api.climate_zone import (
+from aio_remeha_modbus.api.climate_zone import (
     ClimateZone,
+    is_domestic_hot_water,
+)
+from aio_remeha_modbus.api.config import (
+    Configuration,
+    SerialConfiguration,
+    TcpConfiguration,
+    UdpConfiguration,
+)
+from aio_remeha_modbus.api.const import (
+    REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS,
+    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
+    REMEHA_ZONE_RESERVED_REGISTERS,
+    WEEKDAY_TO_MODBUS_VARIABLE,
     ClimateZoneFunction,
     ClimateZoneHeatingMode,
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
-    is_domestic_hot_water,
-)
-from custom_components.remeha_modbus.const import (
-    MODBUS_DEVICE_ADDRESS,
-    MODBUS_SERIAL_BAUDRATE,
-    MODBUS_SERIAL_BYTESIZE,
-    MODBUS_SERIAL_METHOD,
-    MODBUS_SERIAL_PARITY,
-    MODBUS_SERIAL_STOPBITS,
-    REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS,
-    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
-    REMEHA_ZONE_RESERVED_REGISTERS,
-    WEEKDAY_TO_MODBUS_VARIABLE,
     DataType,
-    DeviceInstanceRegisters,
-    MetaRegisters,
     ModbusVariableDescription,
     Weekday,
+)
+from aio_remeha_modbus.api.errors import (
+    DiscoveryTableCorruptedError,
+    InvalidZoneSchedule,
+)
+from aio_remeha_modbus.api.registers import (
+    DeviceInstanceRegisters,
+    MetaRegisters,
     ZoneRegisters,
 )
-from custom_components.remeha_modbus.errors import DiscoveryTableCorruptedError, InvalidZoneSchedule
-from custom_components.remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, TimeOfDay
-from custom_components.remeha_modbus.helpers.modbus import (
-    ModbusPrimitive,
-    bytes_from_registers,
-    from_registers,
-    to_registers,
-)
-
-from .schedule import ZoneSchedule
+from aio_remeha_modbus.api.schedule import ZoneSchedule
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -257,59 +259,58 @@ class RemehaApi:
 
     @classmethod
     def create(
-        cls, name: str, config: MappingProxyType[str, Any], time_zone: tzinfo | None = None
+        cls,
+        name: str,
+        config: Configuration,
+        time_zone: tzinfo | None = None,
     ) -> Self:
         """Create a new `RemehaApi` instance.
 
         Args:
             name (str): The name of the modbus hub name.
-            config (MappingProxyType[str, Any]): The dict containing the configuration of the related `ConfigEntry`.
-            time_zone (tzinfo|None): The time zone of the Remeha appliance. If `None`, local system time is used..
+            config (Configuration): A typed dict containing the configuration.
+            time_zone (tzinfo|None): The time zone of the Remeha appliance. If `None`, local system time is used.
 
         """
-        connection_type: ConnectionType = config[CONF_TYPE]
+        connection_type: ConnectionType = config.connection_type
         client: ModbusBaseClient
-        match connection_type:
-            case ConnectionType.SERIAL:
-                client = AsyncModbusSerialClient(
-                    name="remeha_modbus_serial",
-                    port=config[CONF_PORT],
-                    baudrate=config[MODBUS_SERIAL_BAUDRATE],
-                    bytesize=config[MODBUS_SERIAL_BYTESIZE],
-                    framer=config[MODBUS_SERIAL_METHOD],
-                    parity=config[MODBUS_SERIAL_PARITY],
-                    stopbits=config[MODBUS_SERIAL_STOPBITS],
-                )
-            case ConnectionType.TCP:
-                client = AsyncModbusTcpClient(
-                    name="remeha_modbus_tcp",
-                    host=config[CONF_HOST],
-                    port=int(config[CONF_PORT]),
-                    framer=FramerType.SOCKET,
-                    timeout=120,
-                )
-            case ConnectionType.UDP:
-                client = AsyncModbusUdpClient(
-                    name="remeha_modbus_udp",
-                    host=config[CONF_HOST],
-                    port=int(config[CONF_PORT]),
-                    framer=FramerType.SOCKET,
-                    timeout=120,
-                )
-            case ConnectionType.RTU_OVER_TCP:
-                client = AsyncModbusTcpClient(
-                    name="remeha_modbus_rtu_over_tcp",
-                    host=config[CONF_HOST],
-                    port=int(config[CONF_PORT]),
-                    framer=FramerType.RTU,
-                    timeout=120,
-                )
+
+        if isinstance(config, SerialConfiguration):
+            client = AsyncModbusSerialClient(
+                name="remeha_modbus_serial",
+                port=str(config.port),
+                baudrate=config.baudrate,
+                bytesize=config.bytesize,
+                framer=config.framer,
+                parity=config.parity,
+                stopbits=config.stopbits,
+            )
+        elif isinstance(config, TcpConfiguration):
+            client = AsyncModbusTcpClient(
+                name=(
+                    "remeha_modbus_tcp"
+                    if config.framer is FramerType.SOCKET
+                    else "remeha_modbus_rtu_over_tcp"
+                ),
+                host=config.host,
+                port=int(config.port),
+                framer=config.framer,
+                timeout=config.timeout,
+            )
+        elif isinstance(config, UdpConfiguration):
+            client = AsyncModbusUdpClient(
+                name="remeha_modbus_udp",
+                host=config.host,
+                port=int(config.port),
+                framer=config.framer,
+                timeout=120,
+            )
 
         return cls(
             name=name,
             connection_type=connection_type,
             client=client,
-            device_address=config[MODBUS_DEVICE_ADDRESS],
+            device_address=config.device_address,
             time_zone=time_zone,
         )
 
@@ -330,7 +331,10 @@ class RemehaApi:
             return self._client.connected
 
     async def async_read_registers(
-        self, start_register: int, register_count: int = 1, struct_format: str | bytes = "=H"
+        self,
+        start_register: int,
+        register_count: int = 1,
+        struct_format: str | bytes = "=H",
     ) -> tuple[Any, ...]:
         """Read registers from the modbus interface for debugging purposes.
 
@@ -356,7 +360,9 @@ class RemehaApi:
                 "Modbus device returned an error while reading holding registers."
             )
 
-        return struct.unpack(struct_format, bytes_from_registers(registers=response.registers))
+        return struct.unpack(
+            struct_format, bytes_from_registers(registers=response.registers)
+        )
 
     async def async_connect(self) -> bool:
         """Connect to the configured modbus device."""
@@ -414,7 +420,9 @@ class RemehaApi:
 
             try:
                 response = await self._client.read_holding_registers(
-                    address=address, count=cast(int, variable.count), device_id=self._device_address
+                    address=address,
+                    count=cast(int, variable.count),
+                    device_id=self._device_address,
                 )
             except ModbusException as ex:
                 # A missing reply (timeout) raises instead of returning an error response.
@@ -432,7 +440,9 @@ class RemehaApi:
                 await asyncio.sleep(0.001)
             else:
                 if retries > 0:
-                    _LOGGER.debug("Required %d retries to read address %d.", retries, address)
+                    _LOGGER.debug(
+                        "Required %d retries to read address %d.", retries, address
+                    )
 
                 return response.registers
 
@@ -470,7 +480,9 @@ class RemehaApi:
                 device_id=self._device_address,
             )
             if response.isError():
-                raise ModbusException("Modbus device returned an error while writing registers.")
+                raise ModbusException(
+                    "Modbus device returned an error while writing registers."
+                )
 
     def _map_selected_schedule(
         self,
@@ -530,10 +542,14 @@ class RemehaApi:
         device_id: int = device.id if isinstance(device, DeviceInstance) else device
         return device_id * REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS
 
-    def get_schedule_register_offset(self, schedule: ClimateZoneScheduleId | int) -> int:
+    def get_schedule_register_offset(
+        self, schedule: ClimateZoneScheduleId | int
+    ) -> int:
         """Get the offset in registers for the given `ClimateZoneScheduleId | int."""
         schedule_id: int = (
-            schedule.value if isinstance(schedule, ClimateZoneScheduleId) else int(schedule)
+            schedule.value
+            if isinstance(schedule, ClimateZoneScheduleId)
+            else int(schedule)
         )
         return schedule_id * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
 
@@ -687,7 +703,9 @@ class RemehaApi:
         silent_mode = cast(
             int,
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.SILENT_MODE),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.SILENT_MODE
+                ),
                 destination_variable=MetaRegisters.SILENT_MODE,
             ),
         )
@@ -714,7 +732,9 @@ class RemehaApi:
 
         ch_enabled = bool(
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.CH_ENABLED),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.CH_ENABLED
+                ),
                 destination_variable=MetaRegisters.CH_ENABLED,
             )
         )
@@ -722,14 +742,18 @@ class RemehaApi:
         cooling_type: int = cast(
             int,
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.COOLING_ENABLED),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.COOLING_ENABLED
+                ),
                 destination_variable=MetaRegisters.COOLING_ENABLED,
             ),
         )
 
         cooling_forced = bool(
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.COOLING_FORCED),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.COOLING_FORCED
+                ),
                 destination_variable=MetaRegisters.COOLING_FORCED,
             )
         )
@@ -737,13 +761,17 @@ class RemehaApi:
         current_error = cast(
             int,
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.CURRENT_ERROR),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.CURRENT_ERROR
+                ),
                 destination_variable=MetaRegisters.CURRENT_ERROR,
             ),
         )
 
         raw_error_priority = from_registers(
-            registers=await self._async_read_registers(variable=MetaRegisters.ERROR_PRIORITY),
+            registers=await self._async_read_registers(
+                variable=MetaRegisters.ERROR_PRIORITY
+            ),
             destination_variable=MetaRegisters.ERROR_PRIORITY,
         )
 
@@ -778,16 +806,22 @@ class RemehaApi:
         sm_value: int | None = cast(
             int | None,
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.SEASON_MODE),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.SEASON_MODE
+                ),
                 destination_variable=MetaRegisters.SEASON_MODE,
             ),
         )
-        season_mode: SeasonalMode | None = SeasonalMode(sm_value) if sm_value is not None else None
+        season_mode: SeasonalMode | None = (
+            SeasonalMode(sm_value) if sm_value is not None else None
+        )
 
         summer_winter: float = cast(
             float,
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.SUMMER_WINTER),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.SUMMER_WINTER
+                ),
                 destination_variable=MetaRegisters.SUMMER_WINTER,
             ),
         )
@@ -804,15 +838,21 @@ class RemehaApi:
 
         force_summer = bool(
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.FORCE_SUMMER),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.FORCE_SUMMER
+                ),
                 destination_variable=MetaRegisters.FORCE_SUMMER,
             )
         )
 
         return Appliance(
             silent_mode=SilentMode(silent_mode),
-            silent_mode_start_time=SteppedTimeOfDay.from_steps(silent_mode_start_time_steps),
-            silent_mode_end_time=SteppedTimeOfDay.from_steps(silent_mode_end_time_steps),
+            silent_mode_start_time=SteppedTimeOfDay.from_steps(
+                silent_mode_start_time_steps
+            ),
+            silent_mode_end_time=SteppedTimeOfDay.from_steps(
+                silent_mode_end_time_steps
+            ),
             ch_enabled=ch_enabled,
             cooling_type=CoolingType(cooling_type),
             cooling_forced=cooling_forced,
@@ -899,12 +939,16 @@ class RemehaApi:
         return cast(
             int | None,
             from_registers(
-                registers=await self._async_read_registers(variable=MetaRegisters.NUMBER_OF_ZONES),
+                registers=await self._async_read_registers(
+                    variable=MetaRegisters.NUMBER_OF_ZONES
+                ),
                 destination_variable=MetaRegisters.NUMBER_OF_ZONES,
             ),
         )
 
-    async def async_read_zone(self, id: int, appliance: Appliance) -> ClimateZone | None:
+    async def async_read_zone(
+        self, id: int, appliance: Appliance
+    ) -> ClimateZone | None:
         """Read a single climate zone from the modbus interface.
 
         This reads the registers as described in the table below. Only the base zone registers
@@ -958,7 +1002,9 @@ class RemehaApi:
 
         # Bail out if the zone is not present.
         if zone_type is None or zone_type == ClimateZoneType.NOT_PRESENT.value:
-            _LOGGER.info("Ignoring zone(zone_id=%d), because its type is NOT_PRESENT.", id)
+            _LOGGER.info(
+                "Ignoring zone(zone_id=%d), because its type is NOT_PRESENT.", id
+            )
             return None
 
         zone_function = ClimateZoneFunction(
@@ -999,7 +1045,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.TEMPORARY_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.TEMPORARY_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.TEMPORARY_SETPOINT,
             ),
@@ -1008,7 +1055,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.ROOM_MANUAL_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.ROOM_MANUAL_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.ROOM_MANUAL_SETPOINT,
             ),
@@ -1017,7 +1065,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.DHW_COMFORT_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.DHW_COMFORT_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.DHW_COMFORT_SETPOINT,
             ),
@@ -1026,7 +1075,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.DHW_REDUCED_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.DHW_REDUCED_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.DHW_REDUCED_SETPOINT,
             ),
@@ -1045,7 +1095,8 @@ class RemehaApi:
             bytes,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.END_TIME_MODE_CHANGE, offset=zone_register_offset
+                    variable=ZoneRegisters.END_TIME_MODE_CHANGE,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.END_TIME_MODE_CHANGE,
             ),
@@ -1136,7 +1187,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.DHW_TANK_TEMPERATURE, offset=zone_register_offset
+                    variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
             ),
@@ -1176,13 +1228,17 @@ class RemehaApi:
             mode=zone_mode,
             temporary_setpoint=temporary_setpoint,
             selected_schedule=schedule_id,
-            heating_mode=None if heating_mode is None else ClimateZoneHeatingMode(heating_mode),
+            heating_mode=None
+            if heating_mode is None
+            else ClimateZoneHeatingMode(heating_mode),
             room_setpoint=room_setpoint,
             dhw_comfort_setpoint=dhw_comfort_setpoint,
             dhw_reduced_setpoint=dhw_reduced_setpoint,
             dhw_calorifier_hysteresis=dhw_calorifier_hysteresis,
             temporary_setpoint_end_time=(
-                TimeOfDay.from_bytes(data=end_time_temporary_override, time_zone=self._time_zone)
+                TimeOfDay.from_bytes(
+                    data=end_time_temporary_override, time_zone=self._time_zone
+                )
                 if end_time_temporary_override is not None
                 else None
             ),
@@ -1199,7 +1255,9 @@ class RemehaApi:
             appliance_requires_cooling=appliance_requires_cooling,
         )
 
-    async def async_read_zone_update(self, zone: ClimateZone, appliance: Appliance) -> ClimateZone:
+    async def async_read_zone_update(
+        self, zone: ClimateZone, appliance: Appliance
+    ) -> ClimateZone:
         """Retrieve updates for a single ClimateZone.
 
         In attempt to reduce the amount of calls over the network, this only reads updatable fields from modbus and
@@ -1254,7 +1312,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.TEMPORARY_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.TEMPORARY_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.TEMPORARY_SETPOINT,
             ),
@@ -1263,7 +1322,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.ROOM_MANUAL_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.ROOM_MANUAL_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.ROOM_MANUAL_SETPOINT,
             ),
@@ -1272,7 +1332,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.DHW_COMFORT_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.DHW_COMFORT_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.DHW_COMFORT_SETPOINT,
             ),
@@ -1281,7 +1342,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.DHW_REDUCED_SETPOINT, offset=zone_register_offset
+                    variable=ZoneRegisters.DHW_REDUCED_SETPOINT,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.DHW_REDUCED_SETPOINT,
             ),
@@ -1300,7 +1362,8 @@ class RemehaApi:
             bytes,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.END_TIME_MODE_CHANGE, offset=zone_register_offset
+                    variable=ZoneRegisters.END_TIME_MODE_CHANGE,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.END_TIME_MODE_CHANGE,
             ),
@@ -1391,7 +1454,8 @@ class RemehaApi:
             float | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=ZoneRegisters.DHW_TANK_TEMPERATURE, offset=zone_register_offset
+                    variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
+                    offset=zone_register_offset,
                 ),
                 destination_variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
             ),
@@ -1432,7 +1496,9 @@ class RemehaApi:
             mode=zone_mode,
             temporary_setpoint=temporary_setpoint,
             selected_schedule=schedule_id,
-            heating_mode=(None if heating_mode is None else ClimateZoneHeatingMode(heating_mode)),
+            heating_mode=(
+                None if heating_mode is None else ClimateZoneHeatingMode(heating_mode)
+            ),
             room_setpoint=room_setpoint,
             room_cooling_setpoint_1=room_cooling_setpoint_1,
             room_cooling_setpoint_2=room_cooling_setpoint_2,
@@ -1443,7 +1509,9 @@ class RemehaApi:
             dhw_reduced_setpoint=dhw_reduced_setpoint,
             dhw_calorifier_hysteresis=dhw_calorifier_hysteresis,
             temporary_setpoint_end_time=(
-                TimeOfDay.from_bytes(data=end_time_temporary_override, time_zone=self._time_zone)
+                TimeOfDay.from_bytes(
+                    data=end_time_temporary_override, time_zone=self._time_zone
+                )
                 if end_time_temporary_override is not None
                 else None
             ),
@@ -1477,13 +1545,16 @@ class RemehaApi:
         zone_id: int = zone.id if isinstance(zone, ClimateZone) else zone
         variable: ModbusVariableDescription = WEEKDAY_TO_MODBUS_VARIABLE[day]
         zone_register_offset = self.get_zone_register_offset(zone_id)
-        schedule_register_offset = self.get_schedule_register_offset(schedule=schedule_id)
+        schedule_register_offset = self.get_schedule_register_offset(
+            schedule=schedule_id
+        )
 
         schedule_bytes = cast(
             bytes | None,
             from_registers(
                 registers=await self._async_read_registers(
-                    variable=variable, offset=zone_register_offset + schedule_register_offset
+                    variable=variable,
+                    offset=zone_register_offset + schedule_register_offset,
                 ),
                 destination_variable=variable,
             ),
@@ -1493,14 +1564,24 @@ class RemehaApi:
             None
             if schedule_bytes is None
             else ZoneSchedule.decode(
-                id=schedule_id, zone_id=zone_id, day=day, encoded_schedule=schedule_bytes
+                id=schedule_id,
+                zone_id=zone_id,
+                day=day,
+                encoded_schedule=schedule_bytes,
             )
         )
 
     async def async_write_variable(
         self,
         variable: ModbusVariableDescription,
-        value: str | float | bool | tuple[int, int] | datetime | Enum | ZoneSchedule | None,
+        value: str
+        | float
+        | bool
+        | tuple[int, int]
+        | datetime
+        | Enum
+        | ZoneSchedule
+        | None,
         offset: int = 0,
     ) -> None:
         """Write a single variable to the modbus device.
@@ -1524,9 +1605,15 @@ class RemehaApi:
                 * If `value` is a `datetime` but `variable.data_type is not DataType.CIA_301_TIME_OF_DAY`.
 
         """
-        temp: ModbusPrimitive | bytes | Enum | ZoneSchedule | datetime | tuple[int, int] | None = (
-            value
-        )
+        temp: (
+            ModbusPrimitive
+            | bytes
+            | Enum
+            | ZoneSchedule
+            | datetime
+            | tuple[int, int]
+            | None
+        ) = value
 
         if isinstance(value, datetime):
             if variable.data_type is not DataType.CIA_301_TIME_OF_DAY:
