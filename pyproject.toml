@@ -4,10 +4,24 @@ version = "0.1.0"
 description = "Async I/O modbus API for Remeha appliances"
 readme = "README.md"
 authors = [
-    { name = "houthacker", email = "houthacker@pm.me" }
+    { name = "houthacker"  }
 ]
 requires-python = ">=3.14"
-dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "pydantic>=2.13.4",
+    "pymodbus>=3.13.1",
+    "python-dateutil>=2.9.0.post0",
+]
+license = "LGPL-3.0-or-later"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/houthacker/aio-remeha-modbus"
+Issues = "https://github.com/houthacker/aio-remeha-modbus/issues"
 
 [project.scripts]
 aio-remeha-modbus = "aio_remeha_modbus:main"
@@ -18,5 +32,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "build>=1.5.0",
+    "freezegun>=1.5.5",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "twine>=6.2.0",
 ]

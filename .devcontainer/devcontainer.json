@@ -3,14 +3,17 @@
   "image": "mcr.microsoft.com/devcontainers/python:3.14-trixie",
   "name": "Async I/O modbus library for Remeha appliances",
   "containerEnv": {
-    "PYTHONASYNCIODEBUG": "1"
+    "PYTHONASYNCIODEBUG": "1",
+    "UV_LINK_MODE": "copy"
   },
+  "postStartCommand": "uv venv",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.pylint",
         "ms-python.vscode-python-envs",
+        "charliermarsh.ruff",
         "redhat.vscode-yaml",
         "esbenp.prettier-vscode",
         "wholroyd.jinja",
@@ -26,6 +29,7 @@
           "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit"
           },
+          "editor.defaultFormatter": "charliermarsh.ruff",
           "linting.pylintEnabled": true,
           "linting.enabled": true
         },
@@ -59,7 +63,6 @@
   "remoteUser": "vscode",
   "features": {
     "ghcr.io/jsburckhardt/devcontainer-features/uv:latest": {},
-    "ghcr.io/jsburckhardt/devcontainer-features/ruff:latest": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/warrenbuckley/codespace-features/sqlite:latest": {}
   }

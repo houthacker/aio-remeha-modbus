@@ -1,0 +1,1016 @@
+"""Constants for the Remeha Modbus API."""
+
+from datetime import date
+from enum import Enum, StrEnum, auto
+from typing import Final, Self
+
+from pydantic import Field, model_validator
+from pydantic.dataclasses import dataclass
+
+# Base register information for zones, device info, time schedules
+REMEHA_ZONE_RESERVED_REGISTERS: Final[int] = 512
+REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS: Final[int] = 6
+REMEHA_TIME_PROGRAM_RESERVED_REGISTERS: Final[int] = 70
+REMEHA_TIME_PROGRAM_BYTE_SIZE: Final[int] = 20
+REMEHA_TIME_PROGRAM_SLOT_SIZE: Final[int] = 3
+REMEHA_TIME_STEP_MINUTES: Final[int] = 10
+
+AUTO_SCHEDULE_MINIMAL_END_HOUR: Final[int] = 21
+"""The minimal latest hour required to create a useful auto schedule.
+
+This means that if a schedule is planned before this hour, it cannot succeed
+because then no full day can be planned ahead.
+"""
+
+BOILER_MAX_ALLOWED_HEAT_DURATION: Final[int] = 3
+"""The maximum amount of hours the boiler will get to heat up.
+
+If the central heating- the heat pump unit can modulate, this
+is the estimated amount of time required since that is most
+energy-efficient. When the unit is unable to modulate, this time
+is much shorter, but it will cost more energy.
+"""
+
+MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL: Final[int] = 1000
+"""The maximum normal surface irradiance in The Netherlands, in W/m²"""
+
+
+PV_MIN_TILT_DEGREES: Final[int] = 10
+"""The minimum supported PV system tilt"""
+
+PV_MAX_TILT_DEGREES: Final[int] = 90
+"""The maximum supported PV system tilt"""
+
+WATER_SPECIFIC_HEAT_CAPACITY_KJ: Final[float] = 4.18
+"""The amount of energy required to warm 1 kilogram of water by one degree K"""
+
+
+class BoilerEnergyLabel(StrEnum):
+    """Energy label for DHW boiler.
+
+    The energy label is used to provide an alternative method of calculating heat loss rate.
+    See also https://www.energielabel.nl/apparaten/boiler-en-geiser (Dutch)
+    """
+
+    A_PLUS = "A+"
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+    E = "E"
+    F = "F"
+
+
+@dataclass(frozen=True)
+class BoilerConfiguration:
+    """The configuration of a DHW boiler."""
+
+    volume: Final[float | None]
+    """The volume of the boiler in m³"""
+
+    heat_loss_rate: Final[float | None]
+    """The heat loss rate in Watt"""
+
+    energy_label: Final[BoilerEnergyLabel | None]
+    """The boiler energy label, if the heat loss rate is not available."""
+
+
+class ConnectionType(StrEnum):
+    """Defines the type of modbus connection."""
+
+    TCP = auto()
+    """TCP/IP connection with socket framer, used with Ethernet enabled devices."""
+
+    UDP = auto()
+    """UDP connection with socker framer."""
+
+    RTU_OVER_TCP = "rtuovertcp"
+    """TCP/IP connection with RTU framer, used when connecting to modbus forwarders."""
+
+    SERIAL = auto()
+    """Serial connection with RTU framer, used with TTY port or USB rs485 converter."""
+
+
+# DHW auto scheduling
+class ForecastField(StrEnum):
+    """Describe the weather forecast action response field names that are relevant for this integration."""
+
+    DATETIME = "datetime"
+    CONDITION = "condition"
+    TEMPERATURE = "temperature"
+    PRECIPITATION = "precipitation"
+    SOLAR_IRRADIANCE = "solar_irradiance"
+    """Solar irradiance is not a field that's available by default"""
+
+
+class PVSystemOrientation(StrEnum):
+    """Describe the PV system orientations."""
+
+    EAST_WEST = "EW"
+    """East/West evenly distributes total PV power over east and west."""
+    NORTH = "N"
+    NORTH_NORTH_EAST = "NNE"
+    NORTH_EAST = "NE"
+    EAST_NORTH_EAST = "ENE"
+    EAST = "E"
+    EAST_SOUTH_EAST = "ESE"
+    SOUTH_EAST = "SE"
+    SOUTH_SOUTH_EAST = "SSE"
+    SOUTH = "S"
+    SOUTH_SOUTH_WEST = "SSW"
+    SOUTH_WEST = "SW"
+    WEST_SOUTH_WEST = "WSW"
+    WEST = "W"
+    WEST_NORTH_WEST = "WNW"
+    NORTH_WEST = "NW"
+    NORTH_NORTH_WEST = "NNW"
+
+
+@dataclass(frozen=True)
+class PVSystem:
+    """Parameters that describe a PV system."""
+
+    nominal_power: Final[int]
+    """The total Wp of the system."""
+
+    orientation: Final[PVSystemOrientation]
+    """The direction the PV system faces."""
+
+    tilt: Final[float | None]
+    """The tilt of the PV system, in degrees."""
+
+    annual_efficiency_decrease: Final[float | None]
+    """The annual decrease of efficiency, in percent."""
+
+    installation_date: Final[date | None]
+    """The installation date """
+
+
+PV_EFFICIENCY_TABLE = {
+    PVSystemOrientation.NORTH: {
+        10: 0.77,
+        20: 0.68,
+        30: 0.59,
+        40: 0.50,
+        50: 0.40,
+        60: 0.35,
+        70: 0.30,
+        80: 0.25,
+        90: 0.20,
+    },
+    PVSystemOrientation.NORTH_NORTH_EAST: {
+        10: 0.78,
+        20: 0.70,
+        30: 0.59,
+        40: 0.50,
+        50: 0.45,
+        60: 0.39,
+        70: 0.35,
+        80: 0.30,
+        90: 0.25,
+    },
+    PVSystemOrientation.NORTH_EAST: {
+        10: 0.79,
+        20: 0.73,
+        30: 0.65,
+        40: 0.59,
+        50: 0.53,
+        60: 0.46,
+        70: 0.42,
+        80: 0.38,
+        90: 0.35,
+    },
+    PVSystemOrientation.EAST_NORTH_EAST: {
+        10: 0.83,
+        20: 0.78,
+        30: 0.73,
+        40: 0.68,
+        50: 0.62,
+        60: 0.57,
+        70: 0.52,
+        80: 0.46,
+        90: 0.42,
+    },
+    PVSystemOrientation.EAST: {
+        10: 0.85,
+        20: 0.82,
+        30: 0.80,
+        40: 0.76,
+        50: 0.72,
+        60: 0.67,
+        70: 0.62,
+        80: 0.55,
+        90: 0.50,
+    },
+    PVSystemOrientation.EAST_SOUTH_EAST: {
+        10: 0.87,
+        20: 0.87,
+        30: 0.86,
+        40: 0.85,
+        50: 0.81,
+        60: 0.76,
+        70: 0.71,
+        80: 0.65,
+        90: 0.58,
+    },
+    PVSystemOrientation.SOUTH_EAST: {
+        10: 0.90,
+        20: 0.92,
+        30: 0.93,
+        40: 0.92,
+        50: 0.87,
+        60: 0.84,
+        70: 0.78,
+        80: 0.71,
+        90: 0.62,
+    },
+    PVSystemOrientation.SOUTH_SOUTH_EAST: {
+        10: 0.91,
+        20: 0.94,
+        30: 0.96,
+        40: 0.95,
+        50: 0.92,
+        60: 0.88,
+        70: 0.82,
+        80: 0.75,
+        90: 0.65,
+    },
+    PVSystemOrientation.SOUTH: {
+        10: 0.91,
+        20: 0.95,
+        30: 0.97,
+        40: 0.96,
+        50: 0.94,
+        60: 0.90,
+        70: 0.84,
+        80: 0.75,
+        90: 0.65,
+    },
+    PVSystemOrientation.SOUTH_SOUTH_WEST: {
+        10: 0.91,
+        20: 0.95,
+        30: 0.96,
+        40: 0.95,
+        50: 0.92,
+        60: 0.87,
+        70: 0.82,
+        80: 0.74,
+        90: 0.68,
+    },
+    PVSystemOrientation.SOUTH_WEST: {
+        10: 0.90,
+        20: 0.92,
+        30: 0.93,
+        40: 0.92,
+        50: 0.87,
+        60: 0.84,
+        70: 0.78,
+        80: 0.70,
+        90: 0.63,
+    },
+    PVSystemOrientation.WEST_SOUTH_WEST: {
+        10: 0.87,
+        20: 0.87,
+        30: 0.87,
+        40: 0.85,
+        50: 0.81,
+        60: 0.76,
+        70: 0.71,
+        80: 0.64,
+        90: 0.57,
+    },
+    PVSystemOrientation.WEST: {
+        10: 0.85,
+        20: 0.82,
+        30: 0.80,
+        40: 0.76,
+        50: 0.72,
+        60: 0.68,
+        70: 0.62,
+        80: 0.55,
+        90: 0.49,
+    },
+    PVSystemOrientation.WEST_NORTH_WEST: {
+        10: 0.82,
+        20: 0.77,
+        30: 0.71,
+        40: 0.68,
+        50: 0.62,
+        60: 0.57,
+        70: 0.52,
+        80: 0.46,
+        90: 0.42,
+    },
+    PVSystemOrientation.NORTH_WEST: {
+        10: 0.79,
+        20: 0.72,
+        30: 0.65,
+        40: 0.59,
+        50: 0.52,
+        60: 0.47,
+        70: 0.43,
+        80: 0.38,
+        90: 0.34,
+    },
+    PVSystemOrientation.NORTH_NORTH_WEST: {
+        10: 0.78,
+        20: 0.69,
+        30: 0.60,
+        40: 0.51,
+        50: 0.44,
+        60: 0.39,
+        70: 0.35,
+        80: 0.30,
+        90: 0.26,
+    },
+}
+
+
+class DataType(StrEnum):
+    """Data types for GTW-08 modbus.
+
+    #### Notes
+    The HA modbus component also provides a `DataType` enum, but it has a deprecated
+    `UINT8` variant, which is used extensively by the GTW-08 parameter list.
+    Not providing an `UINT8` variant would require a more generic approach
+    while reading/writing registers, that is more complex than adding a new
+    variant and handling it specifically.
+    """
+
+    UINT8 = "uint8"
+    """A single byte, read from a 2-byte register with struct format of `xB`.
+    Also used for ENUM8"""
+
+    INT16 = "int16"
+    INT32 = "int32"
+    INT64 = "int64"
+    UINT16 = "uint16"
+    UINT32 = "uint32"
+    UINT64 = "uint64"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
+    STRING = "string"
+    CIA_301_TIME_OF_DAY = "cia301_time_of_day"
+    """A time of day, encoded as defined in the CAN301 par 9.1.6.4, 'Time of Day'."""
+
+    TUPLE16 = "tuple16"
+    """A `tuple[int, int]` read from a single register."""
+
+    ZONE_TIME_PROGRAM = "zone_time_program"
+    """A zone time program for a single day, encoded in bytes as defined in the GTW-08 parameter list."""
+
+
+class Limits(float, Enum):
+    """Forced limits users must not exceed."""
+
+    CH_MIN_TEMP = 6.0
+    """Central heating minimum temperature."""
+
+    CH_MAX_TEMP = 30.0
+    """Central heating maximum temperature."""
+
+    DHW_MIN_TEMP = 10.0
+    """Domestic hot water minimum temperature."""
+
+    DHW_MAX_TEMP = 65.0
+    """Domestic hot water maximum temperature."""
+
+    DHW_SCHEDULING_SETPOINT_OVERRIDE_DURATION = 2
+    """The duration in hours of a temporary setpoint override in DHW scheduling."""
+
+    HYSTERESIS_MIN_TEMP = 0.0
+    """The minimum required hysteresis."""
+
+    HYSTERESIS_MAX_TEMP = 40.0
+    """The maximum allowed hysteresis."""
+
+
+class UnitOfTemperature(StrEnum):
+    """Temperature units."""
+
+    CELSIUS = "°C"
+    FAHRENHEIT = "°F"
+    KELVIN = "K"
+
+
+class Weekday(Enum):
+    """Enumeration for days of the week."""
+
+    MONDAY = 0
+    TUESDAY = 1
+    WEDNESDAY = 2
+    THURSDAY = 3
+    FRIDAY = 4
+    SATURDAY = 5
+    SUNDAY = 6
+
+
+class ClimateZoneFunction(Enum):
+    """Enumerates the available zone functions."""
+
+    DISABLED = 0
+    DIRECT = 1
+    MIXING_CIRCUIT = 2
+    SWIMMING_POOL = 3
+    HIGH_TEMPERATURE = 4
+    FAN_CONVECTOR = 5
+    DHW_TANK = 6
+    ELECTRICAL_DHW_TANK = 7
+    TIME_PROGRAM = 8
+    PROCESS_HEAT = 9
+    DHW_LAYERED = 10
+    DHW_BIC = 11
+    DHW_COMMERCIAL_TANK = 12
+    DHW_PRIMARY = 254
+
+    def is_supported(self) -> bool:
+        """Return whether this `ClimateZoneFunction` is currently supported within this integration."""
+        return self in [
+            ClimateZoneFunction.MIXING_CIRCUIT,
+            ClimateZoneFunction.DHW_PRIMARY,
+        ]
+
+    def has_cooling_capability(self) -> bool:
+        """Return whether this `ClimateZoneFunction` supports cooling."""
+        return self in [
+            ClimateZoneFunction.MIXING_CIRCUIT,
+            ClimateZoneFunction.FAN_CONVECTOR,
+        ]
+
+
+class ClimateZoneHeatingMode(Enum):
+    """The mode the zone is currently functioning in."""
+
+    STANDBY = 0
+    HEATING = 1
+    COOLING = 2
+
+
+class ClimateZoneMode(Enum):
+    """Enumerates the modes a zone can be in."""
+
+    SCHEDULING = 0
+    MANUAL = 1
+    ANTI_FROST = 2
+
+
+class ClimateZoneScheduleId(Enum):
+    """The climate zone time program selected by the user.
+
+    Note: After updating the enum values, **ALWAYS** update the mapping to _attr_preset_modes of RemehaModbusClimateEntity!
+    """
+
+    SCHEDULE_1 = 0
+    SCHEDULE_2 = 1
+    SCHEDULE_3 = 2
+    SCHEDULE_4 = 3
+
+
+class ClimateZoneType(Enum):
+    """Enumerates the available zone types."""
+
+    NOT_PRESENT = 0
+    CH_ONLY = 1
+    CH_AND_COOLING = 2
+    DHW = 3
+    PROCESS_HEAT = 4
+    SWIMMING_POOL = 5
+    OTHER = 254
+
+
+# Reference to Remeha modbus registers
+type ModbusVariableRef = int
+
+
+@dataclass(unsafe_hash=True)
+class ModbusVariableDescription:
+    """Modbus register description.
+
+    Attributes:
+        start_address (ModbusRegisterRef): The register index as specified in the GTW-08 parameter list.
+        name (str): The name as shown in the 'Data' field in the GTW-08 parameter list.
+        data_type (DataType): The data type of the variable.
+        scale (float): Multiply the 'raw' variable value by this.
+        count (int): The amount of registers to read/write. Required, and calculated for all types except `DataType.STRING`.
+        friendly_name (str | None): The optional parameter name as shown in the Remeha installation manual of the appliance.
+
+    """
+
+    start_address: ModbusVariableRef
+    name: str
+    data_type: DataType
+    scale: float | None = Field(default=None)
+    count: int | None = Field(default=None)
+    friendly_name: str | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def ensure_mandatory_fields(self) -> Self:
+        """Ensure the fields `count` and `struct_format` have a value when they are required.
+
+        Additionally, if `count` has no value, it is calculated for data types other than `DataType.STRING`.
+
+        * `count` is required if `data_type == DataType.STRING`
+        * `scale` must be `None` if `data_type == DataType.TUPLE16`
+
+        """
+
+        def ensure_register_count() -> int:
+            match self.data_type:
+                case (
+                    DataType.UINT8 | DataType.UINT16 | DataType.INT16 | DataType.TUPLE16
+                ):
+                    return 1
+                case DataType.UINT32 | DataType.INT32 | DataType.FLOAT32:
+                    return 2
+                case DataType.CIA_301_TIME_OF_DAY:
+                    return 3
+                case DataType.UINT64 | DataType.INT64 | DataType.FLOAT64:
+                    return 4
+                case DataType.ZONE_TIME_PROGRAM:
+                    return 10
+                case _:
+                    # Raise an error if self.count cannot be calculated.
+                    raise ValueError(
+                        f"Cannot calculate amount of registers required for {self.data_type}"
+                    )
+
+        if self.data_type == DataType.STRING and self.count is None:
+            raise ValueError(
+                "Attribute self.count has no value, but it is required because data_type is DataType.STRING"
+            )
+
+        if self.data_type == DataType.TUPLE16 and self.scale is not None:
+            raise ValueError(
+                "self.scale has a value, but self.data_type is DataType.TUPLE16, which cannot be scaled."
+            )
+
+        self.count = ensure_register_count() if self.count is None else self.count
+
+        return self
+
+
+AUTO_SCHEDULE_DEFAULT_ID: Final[ClimateZoneScheduleId] = (
+    ClimateZoneScheduleId.SCHEDULE_1
+)
+"""The default schedule id for auto scheduling."""
+
+
+class MetaRegisters:
+    """Register mappings for meta data."""
+
+    NUMBER_OF_DEVICES: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=128,
+        name="numberOfDevices",
+        data_type=DataType.UINT8,
+    )
+    NUMBER_OF_ZONES: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=189, name="NumberOfZones", data_type=DataType.UINT8
+    )
+    RESET_DISCOVERY_TABLE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=200, name="Reset discovery table", data_type=DataType.UINT8
+    )
+
+    CURRENT_ERROR: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=277, name="applianceCurrentError", data_type=DataType.UINT16
+    )
+
+    ERROR_PRIORITY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=278, name="applianceErrorPriority", data_type=DataType.INT16
+    )
+
+    APPLIANCE_STATUS_1: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=279, name="applilanceStatus1", data_type=DataType.UINT8
+    )
+
+    APPLIANCE_STATUS_2: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=280, name="applilanceStatus2", data_type=DataType.UINT8
+    )
+
+    OUTSIDE_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=384, name="varApTOutside", data_type=DataType.INT16, scale=0.01
+    )
+
+    SEASON_MODE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=385, name="varApSeasonMode", data_type=DataType.UINT8
+    )
+
+    SUMMER_WINTER: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=386,
+        name="varApSummerWinter",
+        friendly_name="AP073",
+        data_type=DataType.UINT16,
+        scale=0.01,
+    )
+    """Upper limit for heating.
+
+    Factory default is 22°C. Above this temperature, the appliance
+    won't heat anymore. Setting it to 30.5°C will disable it and
+    cause the appliance to stay in winter mode.
+    """
+
+    NEUTRAL_BAND_SUMMER_WINTER: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=387,
+            name="parApNeutralBandSummerWinter",
+            friendly_name="AP075",
+            data_type=DataType.UINT16,
+            scale=0.01,
+        )
+    )
+    """Temperature band below the summer/winter limit within which the appliance
+    neither heats nor cools (transition season)."""
+
+    FORCE_SUMMER: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=389,
+        name="parApForceSummer",
+        friendly_name="AP074",
+        data_type=DataType.UINT8,
+    )
+    """Whether forced summer mode is active. Heating is switched off, DHW stays active."""
+
+    FLOW_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=400, name="varApTFlow", data_type=DataType.INT16, scale=0.01
+    )
+
+    RETURN_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=401, name="varApTReturn", data_type=DataType.INT16, scale=0.01
+    )
+
+    HEAT_PUMP_FLOW_TEMPERATURE: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=403,
+            name="varHpHeatPumpTF",
+            data_type=DataType.INT16,
+            scale=0.01,
+        )
+    )
+
+    HEAT_PUMP_RETURN_TEMPERATURE: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=404,
+            name="varHpHeatPumpTR",
+            data_type=DataType.INT16,
+            scale=0.01,
+        )
+    )
+
+    WATER_PRESSURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=409,
+        name="varApWaterPressure",
+        data_type=DataType.UINT8,
+        scale=0.1,
+    )
+
+    FLOW_METER: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=410, name="varApFlowmeter", data_type=DataType.UINT16, scale=0.01
+    )
+
+    STATUS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=411, name="varApStatus", data_type=DataType.UINT8
+    )
+
+    SUBSTATUS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=412, name="varApSubStatus", data_type=DataType.UINT8
+    )
+
+    POWER_ACTUAL: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=413,
+        name="varApPowerActual",
+        data_type=DataType.UINT16,
+        scale=0.01,
+    )
+
+    TOTAL_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=439,
+            name="varApTotalEnergyConsumption",
+            data_type=DataType.UINT32,
+        )
+    )
+
+    TOTAL_ENERGY_DELIVERY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=443, name="varApTotalEnergyDelivery", data_type=DataType.UINT32
+    )
+
+    CH_ENERGY_DELIVERY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=445, name="varApChEnergyDelivery", data_type=DataType.UINT32
+    )
+
+    DHW_ENERGY_DELIVERY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=447, name="varApDhwEnergyDelivery", data_type=DataType.UINT32
+    )
+
+    COOLING_ENERGY_DELIVERY: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=449,
+            name="varApCoolingEnergyDelivery",
+            data_type=DataType.UINT32,
+        )
+    )
+
+    BACKUP_ENERGY_DELIVERY: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=451,
+            name="varApBackupEnergyDelivery",
+            data_type=DataType.UINT32,
+        )
+    )
+
+    PUMP_SPEED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=459, name="varApPumpSpeed", data_type=DataType.UINT16, scale=0.01
+    )
+
+    ACTUAL_PRODUCED_POWER: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=460,
+        name="varApActualProducerPower",
+        data_type=DataType.UINT32,
+        scale=0.01,
+    )
+
+    SILENT_MODE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=490,
+        name="enabling_heat_pump_silent_mode",
+        friendly_name="HP058",
+        data_type=DataType.UINT8,
+    )
+
+    SILENT_MODE_START_TIME: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=491,
+            name="silent_mode_start_time",
+            friendly_name="HP094",
+            data_type=DataType.UINT8,
+        )
+    )
+
+    SILENT_MODE_END_TIME: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=492,
+        name="silent_mode_end_time",
+        friendly_name="HP095",
+        data_type=DataType.UINT8,
+    )
+
+    CH_ENABLED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=500,
+        name="parApChEnabled",
+        friendly_name="AP016",
+        data_type=DataType.UINT8,
+    )
+
+    COOLING_ENABLED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=502,
+        name="parApCoolingEnabled",
+        friendly_name="AP028",
+        data_type=DataType.UINT8,
+    )
+
+    # This variable exists on the appliance level. In the Remeha Home app however, this variable
+    # is configurable in two places: in the CH zone and at the system level. Change one, change
+    # the other too.
+    # In this integration, this value is shown in all CH climates and can be set as follows:
+    # * To force cooling, set HVACMode to COOL
+    # * To let the system decide to cool or heat, set HVACMode to HEAT_COOL
+    COOLING_FORCED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=503,
+        name="parApCoolingForced",
+        friendly_name="AP015",
+        data_type=DataType.UINT8,
+    )
+
+
+class DeviceInstanceRegisters:
+    """The register mappings for device instances."""
+
+    TYPE_BOARD: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=129,
+        name="DeviceTypeBoard",
+        data_type=DataType.TUPLE16,
+    )
+    SW_VERSION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=130,
+        name="sw_version",
+        data_type=DataType.TUPLE16,
+    )
+    HW_VERSION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=132,
+        name="hw_version",
+        data_type=DataType.TUPLE16,
+    )
+    ARTICLE_NUMBER: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=133, name="ArticleNumber", data_type=DataType.UINT32
+    )
+
+
+class ZoneRegisters:
+    """The register mappings for a climate zone."""
+
+    TYPE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=640,
+        name="varZoneType",
+        data_type=DataType.UINT8,
+    )
+    FUNCTION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=641,
+        name="parZoneFunction",
+        data_type=DataType.UINT8,
+        friendly_name="CP020",
+    )
+    SHORT_NAME: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=642,
+        name="parZoneFriendlyNameShort",
+        data_type=DataType.STRING,
+        count=3,
+    )
+    OWNING_DEVICE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=646,
+        name="instance",
+        data_type=DataType.UINT8,
+    )
+    MODE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=649,
+        name="parZoneMode",
+        data_type=DataType.UINT8,
+        friendly_name="CP320",
+    )
+    ROOM_COOLING_SETPOINT_1: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=656,
+            name="parZoneRoomCoolingSetpoint1",
+            friendly_name="CP140",
+            data_type=DataType.UINT16,
+            scale=0.1,
+        )
+    )
+    ROOM_COOLING_SETPOINT_2: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=657,
+            name="parZoneRoomCoolingSetpoint2",
+            friendly_name="CP141",
+            data_type=DataType.UINT16,
+            scale=0.1,
+        )
+    )
+    ROOM_COOLING_SETPOINT_3: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=658,
+            name="parZoneRoomCoolingSetpoint3",
+            friendly_name="CP142",
+            data_type=DataType.UINT16,
+            scale=0.1,
+        )
+    )
+    ROOM_COOLING_SETPOINT_4: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=659,
+            name="parZoneRoomCoolingSetpoint4",
+            friendly_name="CP143",
+            data_type=DataType.UINT16,
+            scale=0.1,
+        )
+    )
+    ROOM_COOLING_SETPOINT_5: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=660,
+            name="parZoneRoomCoolingSetpoint5",
+            friendly_name="CP144",
+            data_type=DataType.UINT16,
+            scale=0.1,
+        )
+    )
+    TEMPORARY_SETPOINT: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=663,
+        name="parZoneTemporaryRoomSetpoint",
+        data_type=DataType.UINT16,
+        scale=0.1,
+        friendly_name="CP510",
+    )
+    ROOM_MANUAL_SETPOINT: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=664,
+        name="parZoneRoomManualSetpoint",
+        data_type=DataType.UINT16,
+        scale=0.1,
+        friendly_name="CP200",
+    )
+    DHW_COMFORT_SETPOINT: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=665,
+        name="parZoneDhwComfortSetpoint",
+        data_type=DataType.UINT16,
+        scale=0.01,
+        friendly_name="CP350",
+    )
+    DHW_REDUCED_SETPOINT: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=666,
+        name="parZoneDhwReducedSetpoint",
+        data_type=DataType.UINT16,
+        scale=0.01,
+        friendly_name="CP360",
+    )
+    DHW_CALORIFIER_HYSTERESIS: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=686,
+            # It's actually Hysteresis (with an e), but since the parameter list defines it
+            # as Hysterisis, we'll conform to their naming.
+            name="parZoneDhwCalorifierHysterisis",
+            data_type=DataType.UINT16,
+            scale=0.01,
+            friendly_name="CP420",
+        )
+    )
+    SELECTED_TIME_PROGRAM: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=688,
+        name="parZoneTimeProgramSelected",
+        data_type=DataType.UINT8,
+        friendly_name="CP570",
+    )
+    TIME_PROGRAM_MONDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=689,
+        name="parZoneTimeProgramMonday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
+    )
+    TIME_PROGRAM_TUESDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=699,
+        name="parZoneTimeProgramTuesday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
+    )
+    TIME_PROGRAM_WEDNESDAY: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=709,
+            name="parZoneTimeProgramWednesday",
+            data_type=DataType.ZONE_TIME_PROGRAM,
+        )
+    )
+    TIME_PROGRAM_THURSDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=719,
+        name="parZoneTimeProgramThursday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
+    )
+    TIME_PROGRAM_FRIDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=729,
+        name="parZoneTimeProgramFriday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
+    )
+    TIME_PROGRAM_SATURDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=739,
+        name="parZoneTimeProgramSaturday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
+    )
+    TIME_PROGRAM_SUNDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=749,
+        name="parZoneTimeProgramSunday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
+    )
+    END_TIME_MODE_CHANGE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=978,
+        name="parZoneEndTimeModeChange",
+        data_type=DataType.CIA_301_TIME_OF_DAY,
+    )
+    CURRENT_ROOM_TEMPERATURE: Final[ModbusVariableDescription] = (
+        ModbusVariableDescription(
+            start_address=1104,
+            name="varZoneTRoom",
+            data_type=DataType.INT16,
+            scale=0.1,
+            friendly_name="CM030",
+        )
+    )
+    CURRENT_HEATING_MODE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=1109,
+        name="varZoneCurrentHeatingMode",
+        data_type=DataType.UINT8,
+        friendly_name="CM200",
+    )
+    PUMP_RUNNING: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=1110,
+        name="varZonePumpRunning",
+        data_type=DataType.UINT8,
+        friendly_name="CM050",
+    )
+    DHW_TANK_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=1119,
+        name="varDhwTankTemperature",
+        data_type=DataType.INT16,
+        scale=0.01,
+        friendly_name="CM040",
+    )
+
+
+class HybridRegisters:
+    """Registers for hybrid appliances."""
+
+    COP_CALCULATED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=9230,
+        name="varHpCOPCalculated",
+        data_type=DataType.UINT16,
+        scale=0.001,
+    )
+
+
+WEEKDAY_TO_MODBUS_VARIABLE: Final[dict[Weekday, ModbusVariableDescription]] = {
+    Weekday.MONDAY: ZoneRegisters.TIME_PROGRAM_MONDAY,
+    Weekday.TUESDAY: ZoneRegisters.TIME_PROGRAM_TUESDAY,
+    Weekday.WEDNESDAY: ZoneRegisters.TIME_PROGRAM_WEDNESDAY,
+    Weekday.THURSDAY: ZoneRegisters.TIME_PROGRAM_THURSDAY,
+    Weekday.FRIDAY: ZoneRegisters.TIME_PROGRAM_FRIDAY,
+    Weekday.SATURDAY: ZoneRegisters.TIME_PROGRAM_SATURDAY,
+    Weekday.SUNDAY: ZoneRegisters.TIME_PROGRAM_SUNDAY,
+}
