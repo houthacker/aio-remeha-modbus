@@ -1,0 +1,46 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+categories:
+  - title: "Breaking changes"
+    semver-increment: major
+    when:
+      labels:
+        - "breaking"
+  - title: "New features"
+    semver-increment: minor
+    when:
+      labels:
+        - "feature"
+        - "enhancement"
+  - title: "Bugfixes"
+    when:
+      labels:
+        - "fix"
+        - "bugfix"
+        - "bug"
+  - title: "Maintenance"
+    when:
+      labels:
+        - "docs"
+        - "documentation"
+        - "spelling"
+        - "typo"
+        - "typos"
+  - title: "Dependencies"
+    collapse-after: 1
+    when:
+      label: "dependencies"
+  - type: "pre-exclude"
+    when:
+      label: "skip-changelog"
+  - type: "version-resolver"
+    semver-increment: major
+    when:
+      label: "major"
+  - type: "version-resolver"
+    semver-increment: patch
+change-template: "* $TITLE (#$NUMBER) @$AUTHOR"
+template: |
+  ## Changes
+
+  $CHANGES
