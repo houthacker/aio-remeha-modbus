@@ -1,1 +1,1 @@
-"""Helpers for testing."""
+"""Tests for helpers."""
