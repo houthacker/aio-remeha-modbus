@@ -14,5 +14,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: release-drafter/release-drafter@v7
+        id: release-drafter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-name: release-drafter.yml
+
+      # Update version number in pyproject.toml
+      - uses: actions/checkout@v7
+      - name: Store tag version
+        id: version
+        run: |
+          tag="${{ steps.release-drafter.outputs.tag_name }}"
+          echo "version=${tag:1}" >> $GITHUB_OUTPUT
+
+      - name: Set version in pyproject.toml
+        run: |
+          sed -i "s/version = .*/version = \"${{ steps.version.outputs.version }}\"/g" pyproject.toml
+
+      - name: Commit version changes
+        run: |
+          if ! git diff --quiet; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "Bump version to ${{ steps.version.outputs.version }}"
+            git push
+          fi
