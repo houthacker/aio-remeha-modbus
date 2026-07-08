@@ -1,5 +1,6 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
+exclude-contributors: ["houthacker-release-bot[bot]"]
 categories:
   - title: "Breaking changes"
     semver-increment: major
