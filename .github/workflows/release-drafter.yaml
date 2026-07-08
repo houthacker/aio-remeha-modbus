@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   update_release_draft:
-    if: github.actor != '${{ vars.RELEASE_BOT_COMMITTER_NAME }}' # Prevent endless loops
+    if: github.actor != ${{ vars.RELEASE_BOT_COMMITTER_NAME }} # Prevent endless loops
     runs-on: ubuntu-latest
     steps:
       - name: Create releaser-bot token
@@ -31,7 +31,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
-          persist-credentials: false
 
       - name: Store tag version
         id: version
