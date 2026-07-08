@@ -44,7 +44,6 @@ jobs:
         with:
           name: release-dists
           path: dist/
-          token: ${{ steps.app-token.outputs.token }}
 
       - name: Smoke test (wheel)
         run: uv run --isolated --no-project --with dist/*.whl tests/smoke_test.py

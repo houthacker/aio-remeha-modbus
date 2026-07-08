@@ -62,4 +62,3 @@ jobs:
           path: |
             ${{ github.workspace }}/junit-coverage.xml
             ${{ github.workspace }}/pytest-coverage.txt
-          token: ${{ steps.app-token.outputs.token }}
