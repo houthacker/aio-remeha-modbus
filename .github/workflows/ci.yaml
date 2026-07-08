@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    if: github.actor != ${{ vars.RELEASE_BOT_COMMITTER_NAME }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 4
