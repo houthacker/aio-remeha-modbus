@@ -11,17 +11,28 @@ permissions:
 
 jobs:
   update_release_draft:
+    if: github.actor != '${{ vars.RELEASE_BOT_COMMITTER_NAME }}' # Prevent endless loops
     runs-on: ubuntu-latest
     steps:
+      - name: Create releaser-bot token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
       - uses: release-drafter/release-drafter@v7
         id: release-drafter
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-name: release-drafter.yml
+          token: ${{ steps.app-token.outputs.token }}
 
       # Update version number in pyproject.toml
       - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+
       - name: Store tag version
         id: version
         run: |
@@ -35,8 +46,8 @@ jobs:
       - name: Commit version changes
         run: |
           if ! git diff --quiet; then
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git config user.name "${{ vars.RELEASE_BOT_COMMITTER_NAME }}"
+            git config user.email "${{ vars.RELEASE_BOT_COMMITTER_EMAIL }}"
             git commit -am "Bump version to ${{ steps.version.outputs.version }}"
             git push
           fi
