@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+if [ ! -d ".venv" ]; then
+  uv venv
+else
+  echo "Using existing venv at .venv"
+fi
