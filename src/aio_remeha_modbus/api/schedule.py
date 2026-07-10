@@ -33,7 +33,7 @@ from aio_remeha_modbus.helpers.iterators import consecutive_groups
 from .appliance import SeasonalMode
 
 if TYPE_CHECKING:
-    from .climate_zone import ClimateZone  # noqa: TC004
+    from .climate_zone import ClimateZone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -253,19 +253,17 @@ class ZoneSchedule:
 
         time_slot_count: bytes = int(len(self.time_slots)).to_bytes()
         not_padded_slots: bytes = b"".join(
-            [time_slot_count, *[t.encode() for t in self.time_slots]]
+            [
+                time_slot_count,
+                *[t.encode() for t in self.time_slots],
+            ]
         )
 
         # Add padding null-bytes until length is REMEHA_TIME_PROGRAM_BYTE_SIZE bytes.
         return b"".join(
             [
                 not_padded_slots,
-                *[
-                    b"\00"
-                    for _ in range(
-                        REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots)
-                    )
-                ],
+                *[b"\00" for _ in range(REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots))],
             ]
         )
 
@@ -298,15 +296,11 @@ class ZoneSchedule:
 
         def _generate_timeslots():
             for slot_index in range(1, no_of_slots * SLOT_SIZE, SLOT_SIZE):
-                slot_bytes: bytes = encoded_schedule[
-                    slot_index : slot_index + SLOT_SIZE
-                ]
+                slot_bytes: bytes = encoded_schedule[slot_index : slot_index + SLOT_SIZE]
 
                 yield Timeslot.decode(encoded_time_slot=slot_bytes)
 
-        return cls(
-            id=id, zone_id=zone_id, day=day, time_slots=list(_generate_timeslots())
-        )
+        return cls(id=id, zone_id=zone_id, day=day, time_slots=list(_generate_timeslots()))
 
     @classmethod
     def create_default(
@@ -338,9 +332,7 @@ class ZoneSchedule:
             time_slots=[
                 Timeslot(
                     setpoint_type=TimeslotSetpointType.ECO,
-                    activity=TimeslotActivity.DHW
-                    if is_dhw
-                    else TimeslotActivity.HEAT_COOL,
+                    activity=TimeslotActivity.DHW if is_dhw else TimeslotActivity.HEAT_COOL,
                     switch_time=datetime.time(hour=0),
                 )
             ],
@@ -431,9 +423,7 @@ class ZoneSchedule:
         )
 
         # Emit a warning if the required energy to heat it up again in the morning is too large.
-        required_heating_kwh_after_cooling: float = (
-            heat_loss_rate * cooling_time_hours
-        ) / 1000
+        required_heating_kwh_after_cooling: float = (heat_loss_rate * cooling_time_hours) / 1000
         if required_heating_kwh_after_cooling > default_required_heating_kwh:
             _LOGGER.warning(
                 "DHW boiler is likely going to heat up at night, outside of planning schedule."
@@ -488,10 +478,7 @@ class ZoneSchedule:
         forecasted_kwh_yield: dict[int, int] = {
             fc.start_time.hour: int(
                 (
-                    (
-                        cast(int, fc.solar_irradiance)
-                        / MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL
-                    )
+                    (cast(int, fc.solar_irradiance) / MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL)
                     * pv_system.nominal_power
                     * pv_efficiency
                 )
@@ -513,9 +500,7 @@ class ZoneSchedule:
                 )
 
                 # Calculate the total yield in kwh for the 3-hour block
-                total_yield: int = sum(
-                    [forecasted_kwh_yield.get(h, 0) for h in hours_subset]
-                )
+                total_yield: int = sum([forecasted_kwh_yield.get(h, 0) for h in hours_subset])
 
                 if total_yield >= default_required_heating_kwh:
                     # Only yield the subset if it is a closed range
@@ -527,9 +512,7 @@ class ZoneSchedule:
 
         # Take two timeslots, allowing for both morning- and afternoon heating.
         # If no timeslots are available, use all usable hours: heating is allowed at any time during the day.
-        acceptable_hour_blocks: list[list[int]] = list(
-            _generate_acceptable_hour_blocks()
-        )
+        acceptable_hour_blocks: list[list[int]] = list(_generate_acceptable_hour_blocks())
         accepted_hour_blocks: list[list[int]] = (
             (
                 [acceptable_hour_blocks[0]]
@@ -645,6 +628,4 @@ def is_cooling_schedule(
     now: datetime.datetime = datetime.datetime.now(time_zone)
     day_schedule = schedule.get(Weekday(now.weekday()))
 
-    return (
-        day_schedule.id == ClimateZoneScheduleId.SCHEDULE_4 if day_schedule else False
-    )
+    return day_schedule.id == ClimateZoneScheduleId.SCHEDULE_4 if day_schedule else False

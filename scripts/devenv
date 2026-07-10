@@ -5,3 +5,5 @@ if [ ! -d ".venv" ]; then
 else
   echo "Using existing venv at .venv"
 fi
+
+pre-commit install

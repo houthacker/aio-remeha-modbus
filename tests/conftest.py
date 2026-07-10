@@ -25,7 +25,7 @@ def json_fixture(file_name: str) -> Any:
     """Read a fixture and return it as a `JsonValueType`."""
 
     path = pathlib.Path(__file__).parent.resolve().joinpath(f"fixtures/{file_name}")
-    with open(path, "r") as file:
+    with pathlib.Path.open(path) as file:
         data = file.read()
 
     return json.loads(data)
@@ -103,9 +103,7 @@ def mock_modbus_client(request) -> Generator[AsyncMock]:
 
         async def write_to_store(address: int, values: list[int], **kwargs):
             for idx, r in enumerate(values):
-                store["server"]["registers"][str(address + idx)] = (
-                    int(r).to_bytes(2).hex()
-                )  # type: ignore  # noqa: PGH003
+                store["server"]["registers"][str(address + idx)] = int(r).to_bytes(2).hex()  # type: ignore  # noqa: PGH003
 
             write_pdu.side_effect = AsyncMock()
             write_pdu.isError = Mock(return_value=False)

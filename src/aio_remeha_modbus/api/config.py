@@ -1,4 +1,4 @@
-"""Configuration clases"""
+"""Configuration classes."""
 
 from typing import Literal
 
