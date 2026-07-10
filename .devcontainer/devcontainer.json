@@ -6,7 +6,7 @@
     "PYTHONASYNCIODEBUG": "1",
     "UV_LINK_MODE": "copy"
   },
-  "postStartCommand": "uv venv",
+  "postStartCommand": "./scripts/devenv",
   "customizations": {
     "vscode": {
       "extensions": [
