@@ -44,7 +44,6 @@ dev = [
 ]
 
 [tool.ruff]
-required-version = "0.1.2"
 line-length = 100
 
 [tool.ruff.lint]
