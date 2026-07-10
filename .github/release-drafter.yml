@@ -5,10 +5,10 @@ autolabeler:
   - label: "documentation"
     files:
       - "*.md"
-  - label: "bugfix"
+  - label: "bug"
     branch:
       - "/bugfix\/.+/"
-  - label: "feature"
+  - label: "enhancement"
     branch:
       - "/feature\/.+/"
   - label: "chore"
@@ -26,13 +26,11 @@ categories:
     semver-increment: minor
     when:
       labels:
-        - "feature"
         - "enhancement"
   - title: "Bugfixes"
     when:
       labels:
         - "fix"
-        - "bugfix"
         - "bug"
   - title: "Maintenance"
     when:
