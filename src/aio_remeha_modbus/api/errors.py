@@ -22,6 +22,7 @@ class RemehaApiError(Exception):
         translation_key: str,
         translation_placeholders: Placeholders = {},
     ) -> None:
+        """Create a new RemehaApiError."""
         super().__init__()
 
         self.translation_key = translation_key

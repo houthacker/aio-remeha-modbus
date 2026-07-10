@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from aio-remeha-modbus!")
+"""An asynchronous modbus API for Remeha appliances."""

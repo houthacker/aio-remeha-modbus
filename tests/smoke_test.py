@@ -3,7 +3,7 @@
 
 def test_smoke():
     """Test that the API can be imported."""
-    from aio_remeha_modbus.api import const
+    from aio_remeha_modbus.api import const  # noqa: PLC0415
 
     assert const.MetaRegisters.NUMBER_OF_DEVICES.start_address == 128
 
