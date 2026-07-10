@@ -1,13 +1,26 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 exclude-contributors: ["houthacker-release-bot[bot]"]
+autolabeler:
+  - label: "documentation"
+    files:
+      - "*.md"
+  - label: "bugfix"
+    branch: "/bugfix\/.+/"
+  - label: "feature"
+    branch: "/feature\/.+/"
+  - label: "chore"
+    files:
+      - ".github/workflows/*.yaml"
+      - ".github/*.yml"
+
 categories:
   - title: "Breaking changes"
     semver-increment: major
     when:
       labels:
         - "breaking"
-  - title: "New features"
+  - title: "What's new"
     semver-increment: minor
     when:
       labels:
@@ -27,6 +40,7 @@ categories:
         - "spelling"
         - "typo"
         - "typos"
+        - "chore"
   - title: "Dependencies"
     collapse-after: 1
     when:
