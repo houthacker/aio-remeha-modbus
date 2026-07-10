@@ -6,9 +6,11 @@ autolabeler:
     files:
       - "*.md"
   - label: "bugfix"
-    branch: "/bugfix\/.+/"
+    branch:
+      - "/bugfix\/.+/"
   - label: "feature"
-    branch: "/feature\/.+/"
+    branch:
+      - "/feature\/.+/"
   - label: "chore"
     files:
       - ".github/workflows/*.yaml"
