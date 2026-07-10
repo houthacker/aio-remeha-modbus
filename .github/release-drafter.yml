@@ -1,6 +1,6 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
-exclude-contributors: ["houthacker-release-bot[bot]"]
+exclude-contributors: ["${{ vars.RELEASE_BOT_COMMITTER_NAME }}"]
 autolabeler:
   - label: "documentation"
     files:
