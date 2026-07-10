@@ -5,12 +5,17 @@ autolabeler:
   - label: "documentation"
     files:
       - "*.md"
+    branch:
+      - "/docs\/.+/"
+
   - label: "bug"
     branch:
       - "/bugfix\/.+/"
+
   - label: "enhancement"
     branch:
       - "/feature\/.+/"
+
   - label: "chore"
     files:
       - ".github/workflows/*.yaml"
