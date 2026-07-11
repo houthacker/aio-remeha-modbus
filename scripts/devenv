@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-if [ ! -d ".venv" ]; then
+workspace_folder=${1}
+
+if [ ! -d "${workspace_folder}/.venv" ]; then
   uv venv
 else
   echo "Using existing venv at .venv"
+  source ${workspace_folder}/.venv/bin/activate
 fi
 
 pre-commit install

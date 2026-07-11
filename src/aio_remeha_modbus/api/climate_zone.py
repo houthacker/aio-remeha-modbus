@@ -52,9 +52,7 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
     return type in [
         ClimateZoneType.CH_ONLY,
         ClimateZoneType.CH_AND_COOLING,
-    ] or (
-        type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT
-    )
+    ] or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
 
 
 @dataclass(eq=False)
@@ -145,9 +143,7 @@ class ClimateZone:
     appliance_requires_cooling: bool = False
     """Whether the related appliance requires cooling"""
 
-    def _get_cooling_scheduling_setpoint(
-        self, setpoint_type: TimeslotSetpointType
-    ) -> float | None:
+    def _get_cooling_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float | None:
         match setpoint_type:
             case TimeslotSetpointType.ECO:
                 return self.room_cooling_setpoint_1
@@ -160,14 +156,10 @@ class ClimateZone:
             case TimeslotSetpointType.EVENING:
                 return self.room_cooling_setpoint_5
 
-        _LOGGER.warning(
-            "Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id
-        )
+        _LOGGER.warning("Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id)
         return -1
 
-    def _get_heating_scheduling_setpoint(
-        self, setpoint_type: TimeslotSetpointType
-    ) -> float:
+    def _get_heating_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float:
         raise NotImplementedError
 
     def _get_current_ch_scheduling_setpoint(self) -> float | None:
@@ -244,9 +236,7 @@ class ClimateZone:
                 case ClimateZoneMode.ANTI_FROST:
                     return self.dhw_reduced_setpoint
 
-        _LOGGER.warning(
-            "Current setpoint not supported for climate zones of type %s", self.type
-        )
+        _LOGGER.warning("Current setpoint not supported for climate zones of type %s", self.type)
         return -1
 
     @current_setpoint.setter
@@ -303,9 +293,7 @@ class ClimateZone:
         if self.is_domestic_hot_water():
             return cast(float, self.dhw_tank_temperature)
 
-        _LOGGER.warning(
-            "Current temperature not supported for climate zones of type %s", self.type
-        )
+        _LOGGER.warning("Current temperature not supported for climate zones of type %s", self.type)
         return -1
 
     @property
@@ -316,7 +304,7 @@ class ClimateZone:
         * For DHW (Domestinc Hot Water) it's 65 degrees C
         * For CH (Central Heating) or mixing circuits it's 30 degrees C
         * For all others it's the lowest value of the above.
-            This is to ensure unknown zone types won't get a flow temperature they can't handle.
+        This is to ensure unknown zone types won't get a flow temperature they can't handle.
         """
 
         if self.is_central_heating():
@@ -335,7 +323,7 @@ class ClimateZone:
         * For DHW (Domestinc Hot Water) it's 6 degrees C
         * For CH (Central Heating) or mixing circuits it's 10 degrees C
         * For all others it's the highest value of the above.
-            This is to ensure unknown zone types won't get a flow temperature they can't handle.
+        This is to ensure unknown zone types won't get a flow temperature they can't handle.
         """
 
         if self.is_central_heating():
@@ -372,9 +360,7 @@ class ClimateZone:
         """
         if isinstance(other, self.__class__):
             return (
-                self.id == other.id
-                and self.type == other.type
-                and self.function == other.function
+                self.id == other.id and self.type == other.type and self.function == other.function
             )
 
         return False

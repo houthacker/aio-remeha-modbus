@@ -6,7 +6,7 @@
     "PYTHONASYNCIODEBUG": "1",
     "UV_LINK_MODE": "copy"
   },
-  "postStartCommand": "./scripts/devenv",
+  "postStartCommand": "./scripts/devenv ${containerWorkspaceFolder}",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -21,7 +21,10 @@
         "njpwerner.autodocstring",
         "KevinRose.vsc-python-indent",
         "donjayamanne.python-environment-manager",
-        "fanaticpythoner.better-todo-tree"
+        "fanaticpythoner.better-todo-tree",
+        "lextudio.restructuredtext",
+        "trond-snekvik.simple-rst",
+        "swyddfa.esbonio"
       ],
       "settings": {
         "[python]": {
@@ -45,6 +48,7 @@
         "[md]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         },
+        "autoDocstring.docstringFormat": "sphinx",
         "editor.tabSize": 2,
         "editor.formatOnPaste": false,
         "editor.formatOnSave": true,
