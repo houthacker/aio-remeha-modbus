@@ -1,7 +1,6 @@
 """Tests for ClimateZone."""
 
 import pytest
-from conftest import get_api
 from freezegun import freeze_time
 
 from aio_remeha_modbus.api.api import (
@@ -16,6 +15,7 @@ from aio_remeha_modbus.api.const import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
+from tests.conftest import get_api
 
 
 def test_device_board_category():
@@ -23,25 +23,16 @@ def test_device_board_category():
 
     Required because these are shown in the front-end.
     """
-    assert (
-        str(DeviceBoardCategory(type=DeviceBoardType.CU_GH, generation=2)) == "CU-GH-2"
-    )
-    assert (
-        str(DeviceBoardCategory(type=DeviceBoardType.CU_OH, generation=3)) == "CU-OH-3"
-    )
+    assert str(DeviceBoardCategory(type=DeviceBoardType.CU_GH, generation=2)) == "CU-GH-2"
+    assert str(DeviceBoardCategory(type=DeviceBoardType.CU_OH, generation=3)) == "CU-OH-3"
     assert str(DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10)) == "EHC-10"
     assert str(DeviceBoardCategory(type=DeviceBoardType.MK, generation=3)) == "MK-3"
     assert str(DeviceBoardCategory(type=DeviceBoardType.SCB, generation=17)) == "SCB-17"
     assert str(DeviceBoardCategory(type=DeviceBoardType.EEC, generation=2)) == "EEC-2"
-    assert (
-        str(DeviceBoardCategory(type=DeviceBoardType.GATEWAY, generation=8)) == "GTW-8"
-    )
+    assert str(DeviceBoardCategory(type=DeviceBoardType.GATEWAY, generation=8)) == "GTW-8"
 
     # Compare to a different type
-    assert (
-        DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10)
-        != DeviceBoardType.EHC
-    )
+    assert DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10) != DeviceBoardType.EHC
 
 
 def test_device_instance_equality():
@@ -130,9 +121,7 @@ async def test_climate_zone_dhw_get_current_setpoint(mock_modbus_client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "mock_modbus_client", ["modbus_store_ch_scheduling.json"], indirect=True
-)
+@pytest.mark.parametrize("mock_modbus_client", ["modbus_store_ch_scheduling.json"], indirect=True)
 async def test_climate_zone_ch_get_current_cooling_setpoint(mock_modbus_client):
     """Test retrieval of the current setpoint of a CH climate zone."""
 
@@ -282,9 +271,7 @@ async def test_climate_zone_equality(mock_modbus_client):
     """Test the equality of climate zones."""
 
     api = get_api(mock_modbus_client=mock_modbus_client)
-    zones: list[ClimateZone] = await api.async_read_zones(
-        await api.async_read_appliance()
-    )
+    zones: list[ClimateZone] = await api.async_read_zones(await api.async_read_appliance())
 
     assert zones[0] != zones[1]
     assert zones[1] != ClimateZoneMode.MANUAL
@@ -293,17 +280,13 @@ async def test_climate_zone_equality(mock_modbus_client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "mock_modbus_client", ["modbus_store_ch_scheduling.json"], indirect=True
-)
+@pytest.mark.parametrize("mock_modbus_client", ["modbus_store_ch_scheduling.json"], indirect=True)
 async def test_scheduling_temporary_setpoint(mock_modbus_client):
     """Test that a temporary setpoint can be set if the zone is in scheduling mode."""
 
     # Retrieve a single zone.
     api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(
-        1, await api.async_read_appliance()
-    )
+    zone: ClimateZone | None = await api.async_read_zone(1, await api.async_read_appliance())
     assert zone is not None
     assert zone.selected_schedule == ClimateZoneScheduleId.SCHEDULE_4
 

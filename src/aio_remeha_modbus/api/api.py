@@ -498,9 +498,9 @@ class RemehaApi:
             if zone_mode is ClimateZoneMode.SCHEDULING
             and zone_function.has_cooling_capability()
             and appliance_requires_cooling
-            else ClimateZoneScheduleId(selected_schedule)
-            if selected_schedule is not None
-            else None
+            else (
+                ClimateZoneScheduleId(selected_schedule) if selected_schedule is not None else None
+            )
         )
 
     async def _async_read_schedules(
@@ -1189,7 +1189,7 @@ class RemehaApi:
             mode=zone_mode,
             temporary_setpoint=temporary_setpoint,
             selected_schedule=schedule_id,
-            heating_mode=None if heating_mode is None else ClimateZoneHeatingMode(heating_mode),
+            heating_mode=(None if heating_mode is None else ClimateZoneHeatingMode(heating_mode)),
             room_setpoint=room_setpoint,
             dhw_comfort_setpoint=dhw_comfort_setpoint,
             dhw_reduced_setpoint=dhw_reduced_setpoint,
@@ -1523,7 +1523,7 @@ class RemehaApi:
     async def async_write_variable(
         self,
         variable: ModbusVariableDescription,
-        value: str | float | bool | tuple[int, int] | datetime | Enum | ZoneSchedule | None,
+        value: (str | float | bool | tuple[int, int] | datetime | Enum | ZoneSchedule | None),
         offset: int = 0,
     ) -> None:
         """Write a single variable to the modbus device.
