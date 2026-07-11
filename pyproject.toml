@@ -22,7 +22,8 @@ license-files = ["LICENSE"]
 [project.urls]
 Homepage = "https://github.com/houthacker/aio-remeha-modbus"
 Issues = "https://github.com/houthacker/aio-remeha-modbus/issues"
-"Say thanks!" = "https://buymeacoffee.com/houthacker"
+Funding = "https://buymeacoffee.com/houthacker"
+Documentation = "https://aio-remeha-modbus.readthedocs.io"
 
 [project.scripts]
 aio-remeha-modbus = "aio_remeha_modbus:main"
