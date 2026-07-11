@@ -4,7 +4,6 @@ from datetime import date, time
 from unittest.mock import patch
 
 import pytest
-from conftest import get_api, json_fixture
 
 from aio_remeha_modbus.api.const import (
     AUTO_SCHEDULE_DEFAULT_ID,
@@ -26,14 +25,13 @@ from aio_remeha_modbus.api.schedule import (
     ZoneSchedule,
 )
 from aio_remeha_modbus.helpers.modbus import from_registers
+from tests.conftest import get_api, json_fixture
 
 
 def test_decode_time_schedule():
     """Test decoding a binary schedule."""
 
-    encoded_schedule: bytes = bytes.fromhex(
-        "05 c810 24 c830 2a c820 36 c840 60 c800 87 0000 0000"
-    )
+    encoded_schedule: bytes = bytes.fromhex("05 c810 24 c830 2a c820 36 c840 60 c800 87 0000 0000")
     schedule = ZoneSchedule.decode(
         id=ClimateZoneScheduleId.SCHEDULE_3,
         zone_id=1,

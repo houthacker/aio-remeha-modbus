@@ -3,9 +3,7 @@
 from datetime import datetime, time
 
 import pytest
-from conftest import get_api
 from pymodbus import ModbusException
-from util.registers import SENSOR_REGISTERS
 
 from aio_remeha_modbus.api.api import (
     ConnectionType,
@@ -40,6 +38,8 @@ from aio_remeha_modbus.api.schedule import (
     ZoneSchedule,
 )
 from aio_remeha_modbus.helpers.modbus import to_gtw08_null_value
+from tests.conftest import get_api
+from tests.util.registers import SENSOR_REGISTERS
 
 
 @pytest.mark.asyncio
@@ -206,10 +206,7 @@ async def test_read_not_present_zone(mock_modbus_client):
     """Read a zone that is of ZoneType.NOT_PRESENT."""
     api = get_api(mock_modbus_client=mock_modbus_client)
 
-    assert (
-        await api.async_read_zone(id=3, appliance=await api.async_read_appliance())
-        is None
-    )
+    assert await api.async_read_zone(id=3, appliance=await api.async_read_appliance()) is None
 
 
 @pytest.mark.asyncio
@@ -260,9 +257,7 @@ async def test_read_zones(mock_modbus_client):
     """Read all zones through the modbus interface."""
 
     api = get_api(mock_modbus_client=mock_modbus_client)
-    zones: list[ClimateZone] = await api.async_read_zones(
-        await api.async_read_appliance()
-    )
+    zones: list[ClimateZone] = await api.async_read_zones(await api.async_read_appliance())
 
     assert len(zones) == 2
 

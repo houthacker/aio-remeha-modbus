@@ -332,7 +332,7 @@ class ZoneSchedule:
             time_slots=[
                 Timeslot(
                     setpoint_type=TimeslotSetpointType.ECO,
-                    activity=TimeslotActivity.DHW if is_dhw else TimeslotActivity.HEAT_COOL,
+                    activity=(TimeslotActivity.DHW if is_dhw else TimeslotActivity.HEAT_COOL),
                     switch_time=datetime.time(hour=0),
                 )
             ],
