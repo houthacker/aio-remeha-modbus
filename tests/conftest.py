@@ -11,9 +11,10 @@ import pytest
 from dateutil import tz
 from pymodbus.client import ModbusBaseClient
 
-from aio_remeha_modbus.api.api import ConnectionType, RemehaApi
+from aio_remeha_modbus.api.api import RemehaApi
 from aio_remeha_modbus.api.const import (
     REMEHA_ZONE_RESERVED_REGISTERS,
+    ConnectionType,
     ZoneRegisters,
 )
 

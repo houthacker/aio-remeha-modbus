@@ -6,7 +6,6 @@ import pytest
 from pymodbus import ModbusException
 
 from aio_remeha_modbus.api.api import (
-    ConnectionType,
     DeviceInstance,
     RemehaApi,
 )
@@ -24,6 +23,7 @@ from aio_remeha_modbus.api.const import (
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
+    ConnectionType,
     DataType,
     MetaRegisters,
     ModbusVariableDescription,
