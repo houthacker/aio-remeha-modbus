@@ -3,7 +3,7 @@
 import pytest
 from freezegun import freeze_time
 
-from aio_remeha_modbus.api.api import (
+from aio_remeha_modbus.api import (
     DeviceBoardCategory,
     DeviceBoardType,
     DeviceInstance,

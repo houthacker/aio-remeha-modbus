@@ -5,7 +5,7 @@ from datetime import datetime, time
 import pytest
 from pymodbus import ModbusException
 
-from aio_remeha_modbus.api.api import (
+from aio_remeha_modbus.api import (
     DeviceInstance,
     RemehaApi,
 )
