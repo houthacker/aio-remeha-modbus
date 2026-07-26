@@ -7,6 +7,9 @@ from typing import Final, Self
 from pydantic import Field, model_validator
 from pydantic.dataclasses import dataclass
 
+# Error translation keys
+TK_CONFIG_DICT_MISSING_KEY: Final[str] = "config_dict_missing_key"
+
 # Base register information for zones, device info, time schedules
 REMEHA_ZONE_RESERVED_REGISTERS: Final[int] = 512
 REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS: Final[int] = 6
@@ -516,9 +519,7 @@ class ModbusVariableDescription:
 
         def ensure_register_count() -> int:
             match self.data_type:
-                case (
-                    DataType.UINT8 | DataType.UINT16 | DataType.INT16 | DataType.TUPLE16
-                ):
+                case DataType.UINT8 | DataType.UINT16 | DataType.INT16 | DataType.TUPLE16:
                     return 1
                 case DataType.UINT32 | DataType.INT32 | DataType.FLOAT32:
                     return 2
@@ -549,9 +550,7 @@ class ModbusVariableDescription:
         return self
 
 
-AUTO_SCHEDULE_DEFAULT_ID: Final[ClimateZoneScheduleId] = (
-    ClimateZoneScheduleId.SCHEDULE_1
-)
+AUTO_SCHEDULE_DEFAULT_ID: Final[ClimateZoneScheduleId] = ClimateZoneScheduleId.SCHEDULE_1
 """The default schedule id for auto scheduling."""
 
 
@@ -608,14 +607,12 @@ class MetaRegisters:
     cause the appliance to stay in winter mode.
     """
 
-    NEUTRAL_BAND_SUMMER_WINTER: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=387,
-            name="parApNeutralBandSummerWinter",
-            friendly_name="AP075",
-            data_type=DataType.UINT16,
-            scale=0.01,
-        )
+    NEUTRAL_BAND_SUMMER_WINTER: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=387,
+        name="parApNeutralBandSummerWinter",
+        friendly_name="AP075",
+        data_type=DataType.UINT16,
+        scale=0.01,
     )
     """Temperature band below the summer/winter limit within which the appliance
     neither heats nor cools (transition season)."""
@@ -636,22 +633,18 @@ class MetaRegisters:
         start_address=401, name="varApTReturn", data_type=DataType.INT16, scale=0.01
     )
 
-    HEAT_PUMP_FLOW_TEMPERATURE: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=403,
-            name="varHpHeatPumpTF",
-            data_type=DataType.INT16,
-            scale=0.01,
-        )
+    HEAT_PUMP_FLOW_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=403,
+        name="varHpHeatPumpTF",
+        data_type=DataType.INT16,
+        scale=0.01,
     )
 
-    HEAT_PUMP_RETURN_TEMPERATURE: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=404,
-            name="varHpHeatPumpTR",
-            data_type=DataType.INT16,
-            scale=0.01,
-        )
+    HEAT_PUMP_RETURN_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=404,
+        name="varHpHeatPumpTR",
+        data_type=DataType.INT16,
+        scale=0.01,
     )
 
     WATER_PRESSURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
@@ -680,12 +673,54 @@ class MetaRegisters:
         scale=0.01,
     )
 
-    TOTAL_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=439,
-            name="varApTotalEnergyConsumption",
-            data_type=DataType.UINT32,
-        )
+    GENERATOR_STARTS_TOTAL: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=419, name="varApGeneratorStartsTotal", data_type=DataType.UINT32
+    )
+
+    GENERATOR_HOURS_TOTAL: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=421, name="varApGeneratorHoursTotal", data_type=DataType.UINT32
+    )
+
+    BACKUP1_STARTS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=423, name="varApBackup1Starts", data_type=DataType.UINT32
+    )
+
+    BACKUP1_HOURS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=425, name="varApBackup1Hours", data_type=DataType.UINT32
+    )
+
+    BACKUP2_STARTS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=427, name="varApBackup2Starts", data_type=DataType.UINT32
+    )
+
+    BACKUP2_HOURS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=429, name="varApBackup2Hours", data_type=DataType.UINT32
+    )
+
+    POWER_ON_HOURS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=431, name="varApPowerOnHours", data_type=DataType.UINT32
+    )
+
+    CH_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=433, name="varApChEnergyConsumption", data_type=DataType.UINT32
+    )
+
+    DHW_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=435, name="varApDhwEnergyConsumption", data_type=DataType.UINT32
+    )
+
+    COOLING_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=437, name="varApCoolingEnergyConsumption", data_type=DataType.UINT32
+    )
+
+    BACKUP_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=441, name="varApBackupEnergyConsumption", data_type=DataType.UINT32
+    )
+
+    TOTAL_ENERGY_CONSUMPTION: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=439,
+        name="varApTotalEnergyConsumption",
+        data_type=DataType.UINT32,
     )
 
     TOTAL_ENERGY_DELIVERY: Final[ModbusVariableDescription] = ModbusVariableDescription(
@@ -700,20 +735,16 @@ class MetaRegisters:
         start_address=447, name="varApDhwEnergyDelivery", data_type=DataType.UINT32
     )
 
-    COOLING_ENERGY_DELIVERY: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=449,
-            name="varApCoolingEnergyDelivery",
-            data_type=DataType.UINT32,
-        )
+    COOLING_ENERGY_DELIVERY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=449,
+        name="varApCoolingEnergyDelivery",
+        data_type=DataType.UINT32,
     )
 
-    BACKUP_ENERGY_DELIVERY: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=451,
-            name="varApBackupEnergyDelivery",
-            data_type=DataType.UINT32,
-        )
+    BACKUP_ENERGY_DELIVERY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=451,
+        name="varApBackupEnergyDelivery",
+        data_type=DataType.UINT32,
     )
 
     PUMP_SPEED: Final[ModbusVariableDescription] = ModbusVariableDescription(
@@ -734,13 +765,11 @@ class MetaRegisters:
         data_type=DataType.UINT8,
     )
 
-    SILENT_MODE_START_TIME: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=491,
-            name="silent_mode_start_time",
-            friendly_name="HP094",
-            data_type=DataType.UINT8,
-        )
+    SILENT_MODE_START_TIME: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=491,
+        name="silent_mode_start_time",
+        friendly_name="HP094",
+        data_type=DataType.UINT8,
     )
 
     SILENT_MODE_END_TIME: Final[ModbusVariableDescription] = ModbusVariableDescription(
@@ -832,50 +861,40 @@ class ZoneRegisters:
         data_type=DataType.UINT8,
         friendly_name="CP320",
     )
-    ROOM_COOLING_SETPOINT_1: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=656,
-            name="parZoneRoomCoolingSetpoint1",
-            friendly_name="CP140",
-            data_type=DataType.UINT16,
-            scale=0.1,
-        )
+    ROOM_COOLING_SETPOINT_1: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=656,
+        name="parZoneRoomCoolingSetpoint1",
+        friendly_name="CP140",
+        data_type=DataType.UINT16,
+        scale=0.1,
     )
-    ROOM_COOLING_SETPOINT_2: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=657,
-            name="parZoneRoomCoolingSetpoint2",
-            friendly_name="CP141",
-            data_type=DataType.UINT16,
-            scale=0.1,
-        )
+    ROOM_COOLING_SETPOINT_2: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=657,
+        name="parZoneRoomCoolingSetpoint2",
+        friendly_name="CP141",
+        data_type=DataType.UINT16,
+        scale=0.1,
     )
-    ROOM_COOLING_SETPOINT_3: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=658,
-            name="parZoneRoomCoolingSetpoint3",
-            friendly_name="CP142",
-            data_type=DataType.UINT16,
-            scale=0.1,
-        )
+    ROOM_COOLING_SETPOINT_3: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=658,
+        name="parZoneRoomCoolingSetpoint3",
+        friendly_name="CP142",
+        data_type=DataType.UINT16,
+        scale=0.1,
     )
-    ROOM_COOLING_SETPOINT_4: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=659,
-            name="parZoneRoomCoolingSetpoint4",
-            friendly_name="CP143",
-            data_type=DataType.UINT16,
-            scale=0.1,
-        )
+    ROOM_COOLING_SETPOINT_4: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=659,
+        name="parZoneRoomCoolingSetpoint4",
+        friendly_name="CP143",
+        data_type=DataType.UINT16,
+        scale=0.1,
     )
-    ROOM_COOLING_SETPOINT_5: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=660,
-            name="parZoneRoomCoolingSetpoint5",
-            friendly_name="CP144",
-            data_type=DataType.UINT16,
-            scale=0.1,
-        )
+    ROOM_COOLING_SETPOINT_5: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=660,
+        name="parZoneRoomCoolingSetpoint5",
+        friendly_name="CP144",
+        data_type=DataType.UINT16,
+        scale=0.1,
     )
     TEMPORARY_SETPOINT: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=663,
@@ -905,16 +924,14 @@ class ZoneRegisters:
         scale=0.01,
         friendly_name="CP360",
     )
-    DHW_CALORIFIER_HYSTERESIS: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=686,
-            # It's actually Hysteresis (with an e), but since the parameter list defines it
-            # as Hysterisis, we'll conform to their naming.
-            name="parZoneDhwCalorifierHysterisis",
-            data_type=DataType.UINT16,
-            scale=0.01,
-            friendly_name="CP420",
-        )
+    DHW_CALORIFIER_HYSTERESIS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=686,
+        # It's actually Hysteresis (with an e), but since the parameter list defines it
+        # as Hysterisis, we'll conform to their naming.
+        name="parZoneDhwCalorifierHysterisis",
+        data_type=DataType.UINT16,
+        scale=0.01,
+        friendly_name="CP420",
     )
     SELECTED_TIME_PROGRAM: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=688,
@@ -932,12 +949,10 @@ class ZoneRegisters:
         name="parZoneTimeProgramTuesday",
         data_type=DataType.ZONE_TIME_PROGRAM,
     )
-    TIME_PROGRAM_WEDNESDAY: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=709,
-            name="parZoneTimeProgramWednesday",
-            data_type=DataType.ZONE_TIME_PROGRAM,
-        )
+    TIME_PROGRAM_WEDNESDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=709,
+        name="parZoneTimeProgramWednesday",
+        data_type=DataType.ZONE_TIME_PROGRAM,
     )
     TIME_PROGRAM_THURSDAY: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=719,
@@ -964,14 +979,12 @@ class ZoneRegisters:
         name="parZoneEndTimeModeChange",
         data_type=DataType.CIA_301_TIME_OF_DAY,
     )
-    CURRENT_ROOM_TEMPERATURE: Final[ModbusVariableDescription] = (
-        ModbusVariableDescription(
-            start_address=1104,
-            name="varZoneTRoom",
-            data_type=DataType.INT16,
-            scale=0.1,
-            friendly_name="CM030",
-        )
+    CURRENT_ROOM_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=1104,
+        name="varZoneTRoom",
+        data_type=DataType.INT16,
+        scale=0.1,
+        friendly_name="CM030",
     )
     CURRENT_HEATING_MODE: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=1109,
