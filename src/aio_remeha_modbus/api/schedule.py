@@ -339,7 +339,7 @@ class ZoneSchedule:
         )
 
     @classmethod
-    def generate(
+    def generate(  # noqa: PLR0917
         cls,
         weather_forecast: WeatherForecast,
         pv_system: PVSystem,
