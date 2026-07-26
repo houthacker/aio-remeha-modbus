@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path("../../src").resolve()))
 project = "aio-remeha-modbus"
 copyright = "2026, houthacker"  # noqa: A001
 author = "houthacker"
-release = "0.1.5"
+release = "0.2.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
