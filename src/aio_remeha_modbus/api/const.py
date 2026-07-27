@@ -593,6 +593,10 @@ class MetaRegisters:
         start_address=385, name="varApSeasonMode", data_type=DataType.UINT8
     )
 
+    APPLIANCE_DEMAND_STATUS: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=275, name="applianceDemandStatus", data_type=DataType.UINT8
+    )
+
     SUMMER_WINTER: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=386,
         name="varApSummerWinter",
