@@ -14,7 +14,7 @@
 ## Installation
 Add this library to your project from [PyPI](https://pypi.org) using
 ```bash
-$ uv add aio-remeha-modbus>=0.2.0
+$ uv add aio-remeha-modbus>=0.3.0
 ```
 
 or build it locally by checking out the source of this project and
