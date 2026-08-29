@@ -25,7 +25,7 @@ $ uv pip install dist/*.whl
 ```
 
 ## Exposed API
-The API is documented at [readthedocs](#). A short textual description of the most
+The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/en/latest/). A short textual description of the most
 important classes and their hierarchy is shown below.
 
 #### Caching
