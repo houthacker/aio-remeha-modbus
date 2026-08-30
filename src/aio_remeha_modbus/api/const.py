@@ -983,6 +983,13 @@ class ZoneRegisters:
         name="parZoneEndTimeModeChange",
         data_type=DataType.CIA_301_TIME_OF_DAY,
     )
+    FLOW_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=1100,
+        name="varZoneTFlow",
+        data_type=DataType.INT16,
+        scale=0.01,
+        friendly_name="CM040",
+    )
     CURRENT_ROOM_TEMPERATURE: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=1104,
         name="varZoneTRoom",

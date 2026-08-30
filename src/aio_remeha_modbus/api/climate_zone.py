@@ -134,6 +134,12 @@ class ClimateZone:
     dhw_tank_temperature: float | None
     """The current DHW tank temperature"""
 
+    flow_temperature: float | None
+    """The current flow water temperature of the zone.
+
+    For a domestic hot water zone this is the outgoing DHW temperature.
+    """
+
     pump_running: bool
     """Whether the zone pump is currently running"""
 
