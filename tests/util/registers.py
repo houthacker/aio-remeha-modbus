@@ -41,4 +41,6 @@ SENSOR_REGISTERS: Final[list[ModbusVariableDescription]] = [
     MetaRegisters.PUMP_SPEED,
     MetaRegisters.ACTUAL_PRODUCED_POWER,
     HybridRegisters.COP_CALCULATED,
+    MetaRegisters.BUFFER_TEMPERATURE_BOTTOM,
+    MetaRegisters.BUFFER_TEMPERATURE_TOP,
 ]

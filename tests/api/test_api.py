@@ -172,6 +172,8 @@ async def test_read_sensor_values(mock_modbus_client):
                 0.5,
                 57,
                 None,
+                24.5,
+                23.0,
             ],
             strict=True,
         )

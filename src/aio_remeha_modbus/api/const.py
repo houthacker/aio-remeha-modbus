@@ -810,6 +810,22 @@ class MetaRegisters:
         data_type=DataType.UINT8,
     )
 
+    BUFFER_TEMPERATURE_BOTTOM: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=7600,
+        name="varBufferBottomTemperature",
+        friendly_name="BM001",
+        data_type=DataType.INT16,
+        scale=0.01,
+    )
+
+    BUFFER_TEMPERATURE_TOP: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=7601,
+        name="varBufferTopTemperature",
+        friendly_name="BM002",
+        data_type=DataType.INT16,
+        scale=0.01,
+    )
+
 
 class DeviceInstanceRegisters:
     """The register mappings for device instances."""
