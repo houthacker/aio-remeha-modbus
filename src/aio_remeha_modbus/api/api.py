@@ -1166,6 +1166,16 @@ class RemehaApi:
                 destination_variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
             ),
         )
+        flow_temperature = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.FLOW_TEMPERATURE,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.FLOW_TEMPERATURE,
+            ),
+        )
 
         # Map schedule_1 to schedule_4 if required.
         appliance_requires_cooling = appliance.is_cooling_required()
@@ -1219,6 +1229,7 @@ class RemehaApi:
             room_cooling_setpoint_5=room_cooling_setpoint_5,
             pump_running=bool(pump_running),
             dhw_tank_temperature=dhw_tank_temperature,
+            flow_temperature=flow_temperature,
             time_zone=self._time_zone,
             current_schedule=current_schedule,
             appliance_requires_cooling=appliance_requires_cooling,
@@ -1427,6 +1438,16 @@ class RemehaApi:
                 destination_variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
             ),
         )
+        flow_temperature = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.FLOW_TEMPERATURE,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.FLOW_TEMPERATURE,
+            ),
+        )
 
         # Map schedule_1 to schedule_4 if required.
         appliance_requires_cooling = appliance.is_cooling_required()
@@ -1481,6 +1502,7 @@ class RemehaApi:
             room_temperature=room_temperature,
             pump_running=bool(pump_running),
             dhw_tank_temperature=dhw_tank_temperature,
+            flow_temperature=flow_temperature,
             time_zone=self._time_zone,
             current_schedule=current_schedule,
             appliance_requires_cooling=appliance_requires_cooling,
