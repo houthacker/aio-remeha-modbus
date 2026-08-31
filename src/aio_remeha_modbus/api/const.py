@@ -928,6 +928,27 @@ class ZoneRegisters:
         scale=0.01,
         friendly_name="CP360",
     )
+    HEATING_CURVE_SLOPE: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=674,
+        name="parZoneHeatingCurveSlope",
+        data_type=DataType.UINT8,
+        scale=0.1,
+        friendly_name="CP230",
+    )
+    HEATING_CURVE_BASE_COMFORT: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=675,
+        name="parZoneHeatingCurveBaseComfort",
+        data_type=DataType.UINT16,
+        scale=0.1,
+        friendly_name="CP210",
+    )
+    HEATING_CURVE_BASE_REDUCED: Final[ModbusVariableDescription] = ModbusVariableDescription(
+        start_address=676,
+        name="parZoneHeatingCurveBaseReduced",
+        data_type=DataType.UINT16,
+        scale=0.1,
+        friendly_name="CP220",
+    )
     DHW_CALORIFIER_HYSTERESIS: Final[ModbusVariableDescription] = ModbusVariableDescription(
         start_address=686,
         # It's actually Hysteresis (with an e), but since the parameter list defines it

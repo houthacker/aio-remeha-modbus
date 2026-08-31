@@ -1166,6 +1166,36 @@ class RemehaApi:
                 destination_variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
             ),
         )
+        heating_curve_slope = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.HEATING_CURVE_SLOPE,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.HEATING_CURVE_SLOPE,
+            ),
+        )
+        heating_curve_base_comfort = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.HEATING_CURVE_BASE_COMFORT,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.HEATING_CURVE_BASE_COMFORT,
+            ),
+        )
+        heating_curve_base_reduced = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.HEATING_CURVE_BASE_REDUCED,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.HEATING_CURVE_BASE_REDUCED,
+            ),
+        )
 
         # Map schedule_1 to schedule_4 if required.
         appliance_requires_cooling = appliance.is_cooling_required()
@@ -1219,6 +1249,9 @@ class RemehaApi:
             room_cooling_setpoint_5=room_cooling_setpoint_5,
             pump_running=bool(pump_running),
             dhw_tank_temperature=dhw_tank_temperature,
+            heating_curve_slope=heating_curve_slope,
+            heating_curve_base_comfort=heating_curve_base_comfort,
+            heating_curve_base_reduced=heating_curve_base_reduced,
             time_zone=self._time_zone,
             current_schedule=current_schedule,
             appliance_requires_cooling=appliance_requires_cooling,
@@ -1427,6 +1460,36 @@ class RemehaApi:
                 destination_variable=ZoneRegisters.DHW_TANK_TEMPERATURE,
             ),
         )
+        heating_curve_slope = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.HEATING_CURVE_SLOPE,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.HEATING_CURVE_SLOPE,
+            ),
+        )
+        heating_curve_base_comfort = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.HEATING_CURVE_BASE_COMFORT,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.HEATING_CURVE_BASE_COMFORT,
+            ),
+        )
+        heating_curve_base_reduced = cast(
+            float | None,
+            from_registers(
+                registers=await self._async_read_registers(
+                    variable=ZoneRegisters.HEATING_CURVE_BASE_REDUCED,
+                    offset=zone_register_offset,
+                ),
+                destination_variable=ZoneRegisters.HEATING_CURVE_BASE_REDUCED,
+            ),
+        )
 
         # Map schedule_1 to schedule_4 if required.
         appliance_requires_cooling = appliance.is_cooling_required()
@@ -1481,6 +1544,9 @@ class RemehaApi:
             room_temperature=room_temperature,
             pump_running=bool(pump_running),
             dhw_tank_temperature=dhw_tank_temperature,
+            heating_curve_slope=heating_curve_slope,
+            heating_curve_base_comfort=heating_curve_base_comfort,
+            heating_curve_base_reduced=heating_curve_base_reduced,
             time_zone=self._time_zone,
             current_schedule=current_schedule,
             appliance_requires_cooling=appliance_requires_cooling,

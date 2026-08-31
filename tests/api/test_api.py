@@ -196,6 +196,9 @@ async def test_read_zone(mock_modbus_client):
     assert zone.dhw_reduced_setpoint is None
     assert zone.dhw_tank_temperature is None
     assert zone.function == ClimateZoneFunction.MIXING_CIRCUIT
+    assert zone.heating_curve_slope == 0.5
+    assert zone.heating_curve_base_comfort == 20.0
+    assert zone.heating_curve_base_reduced == 17.0
     assert zone.heating_mode == ClimateZoneHeatingMode.COOLING
     assert zone.id == 1
     assert zone.mode == ClimateZoneMode.MANUAL

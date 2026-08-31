@@ -134,6 +134,15 @@ class ClimateZone:
     dhw_tank_temperature: float | None
     """The current DHW tank temperature"""
 
+    heating_curve_slope: float | None
+    """The slope of the heating curve of the zone"""
+
+    heating_curve_base_comfort: float | None
+    """The heating curve base temperature in comfort mode (15 °C means off)"""
+
+    heating_curve_base_reduced: float | None
+    """The heating curve base temperature in reduced mode (15 °C means off)"""
+
     pump_running: bool
     """Whether the zone pump is currently running"""
 
