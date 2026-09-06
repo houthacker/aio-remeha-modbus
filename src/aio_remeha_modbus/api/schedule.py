@@ -5,10 +5,12 @@ import logging
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Final, Self, cast
 
 from dateutil import parser
 
+from aio_remeha_modbus.api.appliance import SeasonalMode
+from aio_remeha_modbus.api.climate_zone import ClimateZoneScheduleId
 from aio_remeha_modbus.api.const import (
     AUTO_SCHEDULE_MINIMAL_END_HOUR,
     BOILER_MAX_ALLOWED_HEAT_DURATION,
@@ -19,7 +21,6 @@ from aio_remeha_modbus.api.const import (
     WATER_SPECIFIC_HEAT_CAPACITY_KJ,
     BoilerConfiguration,
     BoilerEnergyLabel,
-    ClimateZoneScheduleId,
     ForecastField,
     PVSystem,
     UnitOfTemperature,
@@ -30,12 +31,13 @@ from aio_remeha_modbus.api.errors import AutoSchedulingError
 from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 from aio_remeha_modbus.helpers.iterators import consecutive_groups
 
-from .appliance import SeasonalMode
-
 if TYPE_CHECKING:
-    from .climate_zone import ClimateZone
+    from aio_remeha_modbus.api.climate_zone import ClimateZone
 
 _LOGGER = logging.getLogger(__name__)
+
+AUTO_SCHEDULE_DEFAULT_ID: Final[ClimateZoneScheduleId] = ClimateZoneScheduleId.SCHEDULE_1
+"""The default schedule id for auto scheduling."""
 
 
 def _energy_label_to_heat_loss_rate(label: BoilerEnergyLabel, volume: float) -> float:
