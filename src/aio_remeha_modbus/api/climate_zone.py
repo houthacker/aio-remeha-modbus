@@ -1,16 +1,17 @@
 """Implementation of climate zones within the Remeha Modbus integration."""
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime, tzinfo
+from enum import IntEnum
+from functools import cached_property, lru_cache
 from typing import cast
 
+from modbus_connection import ModbusUnit
+from modbus_connection.model import Component, boolean, enum, gauge, integer, string
+
 from aio_remeha_modbus.api.const import (
-    ClimateZoneFunction,
-    ClimateZoneHeatingMode,
-    ClimateZoneMode,
+    REMEHA_ZONE_RESERVED_REGISTERS,
     ClimateZoneScheduleId,
-    ClimateZoneType,
     Limits,
     Weekday,
 )
@@ -21,8 +22,92 @@ from aio_remeha_modbus.api.schedule import (
     get_current_timeslot,
     is_cooling_schedule,
 )
+from aio_remeha_modbus.helpers.fields import binary
+from aio_remeha_modbus.helpers.gtw08 import TimeOfDay
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class ClimateZoneType(IntEnum):
+    """Enumerates the available zone types."""
+
+    NOT_PRESENT = 0
+    CH_ONLY = 1
+    CH_AND_COOLING = 2
+    DHW = 3
+    PROCESS_HEAT = 4
+    SWIMMING_POOL = 5
+    OTHER = 254
+
+
+class ClimateZoneFunction(IntEnum):
+    """Enumerates the available zone functions."""
+
+    DISABLED = 0
+    DIRECT = 1
+    MIXING_CIRCUIT = 2
+    SWIMMING_POOL = 3
+    HIGH_TEMPERATURE = 4
+    FAN_CONVECTOR = 5
+    DHW_TANK = 6
+    ELECTRICAL_DHW_TANK = 7
+    TIME_PROGRAM = 8
+    PROCESS_HEAT = 9
+    DHW_LAYERED = 10
+    DHW_BIC = 11
+    DHW_COMMERCIAL_TANK = 12
+    DHW_PRIMARY = 254
+
+    def is_supported(self) -> bool:
+        """Return whether this `ClimateZoneFunction` is currently supported within this integration."""
+        return self in [
+            ClimateZoneFunction.MIXING_CIRCUIT,
+            ClimateZoneFunction.DHW_PRIMARY,
+        ]
+
+    def has_cooling_capability(self) -> bool:
+        """Return whether this `ClimateZoneFunction` supports cooling."""
+        return self in [
+            ClimateZoneFunction.MIXING_CIRCUIT,
+            ClimateZoneFunction.FAN_CONVECTOR,
+        ]
+
+
+class ClimateZoneMode(IntEnum):
+    """Enumerates the modes a zone can be in."""
+
+    SCHEDULING = 0
+    MANUAL = 1
+    ANTI_FROST = 2
+
+
+class ClimateZoneHeatingMode(IntEnum):
+    """The mode the zone is currently functioning in."""
+
+    STANDBY = 0
+    HEATING = 1
+    COOLING = 2
+
+
+def _map_selected_schedule(
+    zone_mode: ClimateZoneMode,
+    zone_function: ClimateZoneFunction,
+    appliance_requires_cooling: bool,
+    selected_schedule: int | None,
+) -> ClimateZoneScheduleId | None:
+    """Map `selected_schedule` to the correct `ClimateZoneScheduleId`.
+
+    Remeha uses `SCHEDULE_4` for cooling schedules but writing that to modbus
+    causes an exception. Instead, Remeha uses `SCHEDULE_1` in this case and
+    the cooling schedule usage must be derived from the appliance/zone state.
+    """
+    return (
+        ClimateZoneScheduleId.SCHEDULE_4
+        if zone_mode is ClimateZoneMode.SCHEDULING
+        and zone_function.has_cooling_capability()
+        and appliance_requires_cooling
+        else (ClimateZoneScheduleId(selected_schedule) if selected_schedule is not None else None)
+    )
 
 
 def is_domestic_hot_water(type: ClimateZoneType, function: ClimateZoneFunction) -> bool:
@@ -55,8 +140,41 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
     ] or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
 
 
-@dataclass(eq=False)
-class ClimateZone:
+class _DaySchedule(Component):
+    """A component representing the raw bytes of a zone schedule for a single day."""
+
+    id: ClimateZoneScheduleId
+
+    zone_id: int
+
+    _data = binary(address=689, count=10, writable=True, stride=10)
+    """The binary schedule data."""
+
+    def __init__(
+        self,
+        unit: ModbusUnit,
+        index: int = 1,
+        id: ClimateZoneScheduleId = ClimateZoneScheduleId.SCHEDULE_1,
+        zone_id: int = 1,
+    ):
+        super().__init__(unit=unit, index=index)
+        self.id = id
+        self.zone_id = zone_id
+
+    @cached_property
+    def schedule(self) -> ZoneSchedule | None:
+        """Decode the zone schedule bytes into a ZoneSchedule."""
+
+        if self._data is None:
+            return None
+
+        day = Weekday(self._index - 1)
+        return ZoneSchedule.decode(
+            id=self.id, zone_id=self.zone_id, day=day, encoded_schedule=self._data
+        )
+
+
+class ClimateZone(Component):
     """Defines a climate zone following the GTW-08 parameter list.
 
     In the GTW-08 parameter list, a climate zone contains all fields for all zone types.
@@ -65,83 +183,173 @@ class ClimateZone:
     However, the entities created from `ClimateZone` instances have distinct types for all supported zone types.
     """
 
-    id: int
-    """The one-based climate zone id"""
+    register_ranges = ((640, 646), (648, 980), (1100, 1120))
 
-    type: ClimateZoneType
+    type = enum(address=640, enum_type=ClimateZoneType, nan=0xFF)
     """The type of climate zone"""
 
-    function: ClimateZoneFunction
+    function = enum(address=641, enum_type=ClimateZoneFunction, nan=0xFF)
     """The climate zone function"""
 
-    short_name: str
+    short_name = string(address=642, length=3)
     """The climate zone short name"""
 
-    owning_device: int | None
+    owning_device = integer(address=646, signed=False, nan=0xFFFF)
     """The id of the device owning the zone."""
 
-    mode: ClimateZoneMode
+    mode = enum(address=649, enum_type=ClimateZoneMode, nan=0xFF)
     """The current mode the zone is in"""
 
-    selected_schedule: ClimateZoneScheduleId | None
+    room_cooling_setpoint_1 = gauge(
+        address=656, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Cooling setpoint in ECO mode"""
+
+    room_cooling_setpoint_2 = gauge(
+        address=657, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Cooling setpoint in COMFORT mode"""
+
+    room_cooling_setpoint_3 = gauge(
+        address=658, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Cooling setpoint in AWAY mode"""
+
+    room_cooling_setpoint_4 = gauge(
+        address=659, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Cooling setpoint in MORNING mode"""
+
+    room_cooling_setpoint_5 = gauge(
+        address=660, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Cooling setpoint in EVENING mode"""
+
+    temporary_setpoint = gauge(
+        address=663, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Temporary room setpoint override. Only available when mode is SCHEDULING."""
+
+    room_setpoint = gauge(
+        address=664, scale=0.1, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """The current room temperature setpoint"""
+
+    dhw_comfort_setpoint = gauge(
+        address=665, scale=0.01, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """The setpoint for DHW in comfort mode"""
+
+    dhw_reduced_setpoint = gauge(
+        address=666, scale=0.01, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """The setpoint for DHW in reduced (eco) mode"""
+
+    dhw_calorifier_hysteresis = gauge(
+        address=686, scale=0.01, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Hysteresis to start DHW tank load"""
+
+    selected_schedule = enum(address=688, enum_type=ClimateZoneScheduleId, nan=0xFF, writable=True)
     """The currently selected schedule.
 
     Although this property is optional, it needn't be `None` if `mode != ClimateZoneMode.SCHEDULING`.
     """
 
-    current_schedule: dict[Weekday, ZoneSchedule | None]
-    """If `selected_schedule` has a value, `current_schedule` contains the schedule for all week days."""
-
-    heating_mode: ClimateZoneHeatingMode | None
-    """The current heating mode of the climate zone"""
-
-    temporary_setpoint: float | None
-    """Temporary room setpoint override. Only available when mode is SCHEDULING."""
-
-    room_setpoint: float | None
-    """The current room temperature setpoint"""
-
-    dhw_comfort_setpoint: float | None
-    """The setpoint for DHW in comfort mode"""
-
-    dhw_reduced_setpoint: float | None
-    """The setpoint for DHW in reduced (eco) mode"""
-
-    dhw_calorifier_hysteresis: float | None
-    """Hysteresis to start DHW tank load"""
-
-    temporary_setpoint_end_time: datetime | None
+    _temporary_setpoint_end_time = binary(address=978, count=3, writable=True)
     """End time of temporary setpoint override"""
 
-    room_temperature: float | None
+    room_temperature = gauge(address=1104, scale=0.1, nan=0x8000, unit="°C")
     """The current room temperature"""
 
-    room_cooling_setpoint_1: float | None
-    """Cooling setpoint in ECO mode"""
+    heating_mode = enum(address=1109, enum_type=ClimateZoneHeatingMode, nan=0xFF)
+    """The current heating mode of the climate zone"""
 
-    room_cooling_setpoint_2: float | None
-    """Cooling setpoint in COMFORT mode"""
-
-    room_cooling_setpoint_3: float | None
-    """Cooling setpoint in AWAY mode"""
-
-    room_cooling_setpoint_4: float | None
-    """Cooling setpoint in MORNING mode"""
-
-    room_cooling_setpoint_5: float | None
-    """Cooling setpoint in EVENING mode"""
-
-    dhw_tank_temperature: float | None
-    """The current DHW tank temperature"""
-
-    pump_running: bool
+    pump_running = boolean(address=1110)
     """Whether the zone pump is currently running"""
+
+    dhw_tank_temperature = gauge(address=1119, scale=0.01, nan=0x8000, unit="°C")
+    """The current DHW tank temperature"""
 
     time_zone: tzinfo | None
     """The time zone of the related appliance"""
 
     appliance_requires_cooling: bool = False
     """Whether the related appliance requires cooling"""
+
+    @property
+    def id(self) -> int:
+        """The one-based climate zone id."""
+
+        return int(self._base_offset / REMEHA_ZONE_RESERVED_REGISTERS) + 1
+
+    @lru_cache
+    async def async_current_schedule(self) -> dict[Weekday, ZoneSchedule | None]:
+        """If `selected_schedule` has a value, `current_schedule` contains that schedule for all week days."""
+
+        empty_schedule = dict.fromkeys(Weekday)
+        if self.mode is None or self.function is None:
+            return empty_schedule
+
+        selected_schedule = self.selected_schedule
+        schedule_id = (
+            _map_selected_schedule(
+                zone_mode=self.mode,
+                zone_function=self.function,
+                appliance_requires_cooling=self.appliance_requires_cooling,
+                selected_schedule=selected_schedule,
+            )
+            if selected_schedule is not None
+            else None
+        )
+        if schedule_id is None:
+            return empty_schedule
+
+        schedule = empty_schedule.copy()
+        for day in Weekday:
+            day_schedule = _DaySchedule(self._unit, day + 1, id=schedule_id, zone_id=self.id)
+            await day_schedule.async_update()
+
+            schedule[day] = day_schedule.schedule
+
+        return schedule
+
+    @property
+    def temporary_setpoint_end_time(self) -> datetime | None:
+        """Get the end time of the temporary setpoint override.
+
+        The returned `datetime` is in the configured time zone of `self.time_zone`.
+        """
+
+        if self._temporary_setpoint_end_time is None:
+            return None
+
+        return TimeOfDay.from_bytes(
+            data=self._temporary_setpoint_end_time, time_zone=self.time_zone
+        )
+
+    def __init__(
+        self,
+        unit: ModbusUnit,
+        *,
+        base_offset: int = 0,
+        time_zone: tzinfo | None = None,
+        appliance_requires_cooling: bool = False,
+    ) -> None:
+        """Create a new ClimateZone component.
+
+        Raises:
+            AssertionError if `base_offset`is not a multiple of `REMEHA_ZONE_RESERVED_REGISTERS`
+
+        """
+        assert base_offset % REMEHA_ZONE_RESERVED_REGISTERS == 0, (
+            f"ClimateZone base offset must be divisible by {REMEHA_ZONE_RESERVED_REGISTERS}, which {base_offset} is not."
+        )
+
+        super().__init__(unit, 1, base_offset=base_offset)
+
+        self.time_zone = time_zone
+        self.appliance_requires_cooling = appliance_requires_cooling
 
     def _get_cooling_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float | None:
         match setpoint_type:
@@ -162,7 +370,7 @@ class ClimateZone:
     def _get_heating_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float:
         raise NotImplementedError
 
-    def _get_current_ch_scheduling_setpoint(self) -> float | None:
+    async def _async_get_current_ch_scheduling_setpoint(self) -> float | None:
         if self.temporary_setpoint_end_time is not None:
             if (
                 self.temporary_setpoint_end_time is not None
@@ -171,8 +379,9 @@ class ClimateZone:
                 # A setpoint override is currently active.
                 return cast(float, self.temporary_setpoint)
 
+        schedule = await self.async_current_schedule()
         current_timeslot: Timeslot | None = get_current_timeslot(
-            schedule=self.current_schedule, time_zone=self.time_zone
+            schedule=schedule, time_zone=self.time_zone
         )
 
         if current_timeslot is None:
@@ -181,12 +390,12 @@ class ClimateZone:
             )
             return -1
 
-        if is_cooling_schedule(self.current_schedule, self.time_zone):
+        if is_cooling_schedule(schedule, self.time_zone):
             return self._get_cooling_scheduling_setpoint(current_timeslot.setpoint_type)
 
         return self._get_heating_scheduling_setpoint(current_timeslot.setpoint_type)
 
-    def _get_current_dhw_scheduling_setpoint(self) -> float | None:
+    async def _async_get_current_dhw_scheduling_setpoint(self) -> float | None:
         if self.temporary_setpoint_end_time is not None:
             if (
                 self.temporary_setpoint_end_time is not None
@@ -196,7 +405,7 @@ class ClimateZone:
                 return cast(float, self.temporary_setpoint)
 
         current_timeslot: Timeslot | None = get_current_timeslot(
-            schedule=self.current_schedule, time_zone=self.time_zone
+            schedule=await self.async_current_schedule(), time_zone=self.time_zone
         )
         if current_timeslot is not None:
             match current_timeslot.setpoint_type:
@@ -207,8 +416,7 @@ class ClimateZone:
 
         return -1
 
-    @property
-    def current_setpoint(self) -> float | None:
+    async def async_get_current_setpoint(self) -> float | None:
         """Return the current setpoint of this zone.
 
         The actual returned setpoint field depends on the type of zone and
@@ -222,7 +430,7 @@ class ClimateZone:
         if self.is_central_heating():
             match self.mode:
                 case ClimateZoneMode.SCHEDULING:
-                    return self._get_current_ch_scheduling_setpoint()
+                    return await self._async_get_current_ch_scheduling_setpoint()
                 case ClimateZoneMode.MANUAL:
                     return self.room_setpoint
                 case ClimateZoneMode.ANTI_FROST:
@@ -230,7 +438,7 @@ class ClimateZone:
         if self.is_domestic_hot_water():
             match self.mode:
                 case ClimateZoneMode.SCHEDULING:
-                    return self._get_current_dhw_scheduling_setpoint()
+                    return await self._async_get_current_dhw_scheduling_setpoint()
                 case ClimateZoneMode.MANUAL:
                     return self.dhw_comfort_setpoint
                 case ClimateZoneMode.ANTI_FROST:
@@ -239,8 +447,7 @@ class ClimateZone:
         _LOGGER.warning("Current setpoint not supported for climate zones of type %s", self.type)
         return -1
 
-    @current_setpoint.setter
-    def current_setpoint(self, value: float):
+    def set_current_setpoint(self, value: float):
         """Set the current setpoint of this zone."""
 
         # Check requested setpoint against min/max
@@ -337,17 +544,46 @@ class ClimateZone:
     def has_cooling_capability(self) -> bool:
         """Whether this type of climate zone is capable of cooling."""
 
-        return self.function.has_cooling_capability()
+        return cast(ClimateZoneFunction, self.function).has_cooling_capability()
 
     def is_central_heating(self) -> bool:
         """Determine if this zone is a CH (central heating) zone."""
 
-        return is_central_heating(self.type, self.function)
+        return is_central_heating(
+            cast(ClimateZoneType, self.type), cast(ClimateZoneFunction, self.function)
+        )
 
     def is_domestic_hot_water(self) -> bool:
         """Determine if this zone is a DHW (domestic hot water) zone."""
 
-        return is_domestic_hot_water(self.type, self.function)
+        return is_domestic_hot_water(
+            cast(ClimateZoneType, self.type), cast(ClimateZoneFunction, self.function)
+        )
+
+    async def async_set_room_cooling_setpoint_1(self, value: float):
+        """Write the `ECO` room setpoint."""
+
+        await self.write("room_cooling_setpoint_1", value)
+
+    async def async_set_room_cooling_setpoint_2(self, value: float):
+        """Write the `COMFORT` room setpoint."""
+
+        await self.write("room_cooling_setpoint_2", value)
+
+    async def async_set_room_cooling_setpoint_3(self, value: float):
+        """Write the `AWAY` room setpoint."""
+
+        await self.write("room_cooling_setpoint_3", value)
+
+    async def async_set_room_cooling_setpoint_4(self, value: float):
+        """Write the `MORNING` room setpoint."""
+
+        await self.write("room_cooling_setpoint_4", value)
+
+    async def async_set_room_cooling_setpoint_5(self, value: float):
+        """Write the `EVENING` room setpoint."""
+
+        await self.write("room_cooling_setpoint_5", value)
 
     def __eq__(self, other) -> bool:
         """Compare this `ClimateZone` with another for equality.

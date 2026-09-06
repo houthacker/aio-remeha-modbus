@@ -1,11 +1,14 @@
 """Implementation of appliance-scoped functionality."""
 
-from dataclasses import dataclass
 from datetime import time
-from enum import Enum
+from enum import IntEnum
+
+from modbus_connection.model import Component, boolean, enum, gauge, integer
+
+from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 
 
-class SilentMode(Enum):
+class SilentMode(IntEnum):
     """Defines the silent mode of the appliance."""
 
     OFF = 0
@@ -18,7 +21,7 @@ class SilentMode(Enum):
     """Extra silent mode."""
 
 
-class CoolingType(Enum):
+class CoolingType(IntEnum):
     """Defines the type of cooling used by the appliance (if any)."""
 
     OFF = 0
@@ -38,7 +41,7 @@ class CoolingType(Enum):
     """
 
 
-class SeasonalMode(Enum):
+class SeasonalMode(IntEnum):
     """Defines the current seasonal mode of the appliance."""
 
     WINTER = 0
@@ -50,200 +53,68 @@ class SeasonalMode(Enum):
     SUMMER = 3
 
 
-class ApplianceErrorPriority(Enum):
-    """Defines the current error state of the appliance."""
-
-    LOCKING = 0
-    """This error type has the highest priority. The appliance is locked because of a physical defect or missing configuration unit, to prevent further damage."""
-
-    BLOCKING = 3
-    """This error type has high priority. The appliance is blocked because of multiple prior warnings."""
-
-    WARNING = 6
-    """This error type has medium priority. If ignored, the appliance will block the water flow to prevent damage."""
-
-    NO_ERROR = 255
-    """This error type has low priority. No action required."""
-
-
-class ApplianceDemandStatus:
-    """The appliance demand status shows boolean fields from register 275."""
-
-    unmixed_circuits_released: bool
-    """Whether unmixed circuits are released."""
-
-    mixed_circuits_released: bool
-    """Whether mixed circuits are released."""
-
-    valves_open_or_pump_running_safety: bool
-    """Whether all valves are open / pump is running for safety."""
-
-    manual_heat_demand_active: bool
-    """Whether manual heat demand is active."""
-
-    cooling_allowed: bool
-    """Whether cooling is allowed at the appliance level.
-
-    This refers to the appliance as a whole, not to an individual zone, so it may be
-    `True` while no zone that is able to cool exists.
-    """
-
-    dhw_circuits_released: bool
-    """Whether DHW circuits are released."""
-
-    burner_unit_active: bool
-    """Whether the burner/generator unit is active."""
-
-    def __init__(self, value: int | None):
-        """Create a new ApplianceDemandStatus instance using the raw value of register 275."""
-
-        def _get_bit(index: int, val: int) -> bool:
-            return (val >> index) & 1 == 1
-
-        status: int = 0 if value is None else value
-
-        self.unmixed_circuits_released = _get_bit(0, status)
-        self.mixed_circuits_released = _get_bit(1, status)
-        self.valves_open_or_pump_running_safety = _get_bit(2, status)
-        self.manual_heat_demand_active = _get_bit(3, status)
-        self.cooling_allowed = _get_bit(4, status)
-        self.dhw_circuits_released = _get_bit(5, status)
-        self.burner_unit_active = _get_bit(6, status)
-
-
-class ApplianceStatus:
-    """The appliance status shows various boolean status fields about the applliance."""
-
-    flame_on: bool
-    """Whether the appliance flame is on."""
-
-    heat_pump_on: bool
-    """Whether the appliance heat pump is on."""
-
-    electrical_backup_on: bool
-    """Whether the central heating electrical backup is on."""
-
-    electrical_backup2_on: bool
-    """Whether the 2nd central heating electrical backup is on."""
-
-    dhw_electrical_backup_on: bool
-    """Whether the DHW electrical backup is on."""
-
-    service_required: bool
-    """Whether the appliance requires service."""
-
-    power_down_reset_needed: bool
-    """Whether the appliance must be powered down and reset. Leave it powered off at least 20 seconds."""
-
-    water_pressure_low: bool
-    """Whether the water pressure is low."""
-
-    appliance_pump_on: bool
-    """Whether the main pump is on."""
-
-    three_way_valve_open: bool
-    """Whether the 3-way valve is open."""
-
-    three_way_valve: bool
-    """Unknown, but relate to 3-way valve obviously."""
-
-    three_way_valve_closed: bool
-    """Whether the 3-way valve is closed."""
-
-    dhw_active: bool
-    """Whether the DHW system is active."""
-
-    ch_active: bool
-    """Whether the CH system is active."""
-
-    cooling_active: bool
-    """Whether the cooling system is active."""
-
-    def __init__(self, bits: tuple[int, int]):
-        """Create a new ApplianceStatus instance using the given bit list.
-
-        Args:
-          bits (tuple[int, int]): The  bit values from the appliance status.
-
-        """
-
-        def _get_bit(index: int, value: int) -> bool:
-            return (value >> index) & 1 == 1
-
-        status: int = bits[1] << 8 | bits[0]
-
-        self.flame_on = _get_bit(0, status)
-        self.heat_pump_on = _get_bit(1, status)
-        self.electrical_backup_on = _get_bit(2, status)
-        self.electrical_backup2_on = _get_bit(3, status)
-        self.dhw_electrical_backup_on = _get_bit(4, status)
-        self.service_required = _get_bit(5, status)
-        self.power_down_reset_needed = _get_bit(6, status)
-        self.water_pressure_low = _get_bit(7, status)
-        self.appliance_pump_on = _get_bit(8, status)
-        self.three_way_valve_open = _get_bit(9, status)
-        self.three_way_valve = _get_bit(10, status)
-        self.three_way_valve_closed = _get_bit(11, status)
-        self.dhw_active = _get_bit(12, status)
-        self.ch_active = _get_bit(13, status)
-        self.cooling_active = _get_bit(14, status)
-
-
-@dataclass
-class Appliance:
+class Appliance(Component):
     """Represents a Remeha appliance.
 
     An `Appliance` stores information about the appliance that cannot be linked to any of
     the other available api types, like appliance error status or burning hours counters.
     """
 
-    silent_mode: SilentMode
-    """The silent mode level of the appliance."""
+    outside_temperature = gauge(address=384, scale=0.01, nan=0x8000, unit="°C")
+    """The outside temperature."""
 
-    silent_mode_start_time: time
-    """The time of day at which the silent mode starts."""
+    season_mode = enum(address=385, enum_type=SeasonalMode, signed=False)
+    """Which season mode is currently active."""
 
-    silent_mode_end_time: time
-    """The time of day at which the silent mode ends."""
+    summer_winter = gauge(
+        address=386, scale=0.01, signed=False, nan=0xFFFF, writable=True, unit="°C"
+    )
+    """Upper limit of outdoor temperature for heating."""
 
-    ch_enabled: bool
-    """Whether central heating demand processing is enabled."""
-
-    cooling_type: CoolingType
-    """The type of cooling."""
-
-    current_error: int | None
-    """The current error, encoded in two unsigned bytes. `None` means no error.
-
-    The joined bytes show the error that can be looked up in the manual
-    , e.g. `0x0207` is error `02.07`.
-
-    """
-
-    error_priority: ApplianceErrorPriority
-    """Shows the current appliance error priority."""
-
-    demand_status: ApplianceDemandStatus
-    """Shows appliance demand / release fields from register 275."""
-
-    cooling_forced: bool
-    """Whether the appliance is in forced cooling mode."""
-
-    status: ApplianceStatus
-    """Shows various status fields."""
-
-    season_mode: SeasonalMode | None
-    """The current seasonal mode of the appliance."""
-
-    summer_winter: float
-    """The upper limit for heating."""
-
-    neutral_band_summer_winter: float = 0.0
+    neutral_band_summer_winter = gauge(
+        address=387, scale=0.01, signed=False, writable=True, unit="°C"
+    )
     """Temperature band below the summer/winter limit within which the appliance
     neither heats nor cools (parameter AP075)."""
 
-    force_summer: bool = False
+    forced_summer_mode = boolean(address=389, nan=0xFF, writable=True)
     """Whether forced summer mode is active (parameter AP074)."""
+
+    silent_mode = enum(address=490, enum_type=SilentMode, signed=False, nan=0xFF, writable=True)
+    """The silent mode level of the appliance."""
+
+    _silent_mode_start_time = integer(address=491, signed=False, nan=0xFF, writable=True)
+
+    @property
+    def silent_mode_start_time(self) -> time | None:
+        """The time of day at which the silent mode starts."""
+
+        return SteppedTimeOfDay.from_steps(self._silent_mode_start_time)
+
+    _silent_mode_end_time = integer(address=492, signed=False, nan=0xFF, writable=True)
+
+    @property
+    def silent_mode_end_time(self) -> time | None:
+        """The time of day at which the silent mode ends."""
+
+        return SteppedTimeOfDay.from_steps(self._silent_mode_end_time)
+
+    ch_enabled = boolean(address=500, nan=0xFF, writable=True)
+    """Whether central heating demand processing is enabled."""
+
+    cooling_type = enum(address=502, enum_type=CoolingType, signed=False, nan=0xFF, writable=True)
+    """The type of cooling."""
+
+    forced_cooling_mode = boolean(address=503, nan=0xFF, writable=True)
+    """Whether the appliance is in forced cooling mode.
+
+    This variable is defined on the appliance level. In the Remeha Home app however, this variable
+    is configurable in two places: in the CH zone and at the system level. Change one, change
+    the other too.
+    In this integration, this value is shown in all CH climates and can be set as follows:
+      * To force cooling, set HVACMode to COOL
+      * To let the system decide to cool or heat, set HVACMode to HEAT_COOL
+    """
 
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.
@@ -251,28 +122,56 @@ class Appliance:
         This can be forced (`cooling_forced == True`) or derived (`season_mode` is in a summer variant).
         """
 
-        return self.cooling_forced or self.season_mode in [
+        return self.forced_cooling_mode or self.season_mode in [
             SeasonalMode.SUMMER_NEUTRAL_BAND,
             SeasonalMode.SUMMER,
         ]
 
-    def error_as_str(self) -> str:
-        """Return a user-friendly string representing the error."""
+    async def set_summer_winter(self, value: float):
+        """Set the outdoor temperature upper limit for heating."""
 
-        prefix: str
-        match self.error_priority:
-            case ApplianceErrorPriority.NO_ERROR:
-                return "OK"
-            case ApplianceErrorPriority.WARNING:
-                prefix = "A"
-            case ApplianceErrorPriority.BLOCKING:
-                prefix = "H"
-            case ApplianceErrorPriority.LOCKING:
-                prefix = "E"
-            case _:
-                prefix = "?"
+        await self.write("summer_winter", value)
 
-        assert self.current_error is not None
-        return (
-            f"{prefix}{(self.current_error >> 8):02d}.{(self.current_error & int('00ff', 16)):02d}"
-        )
+    async def set_neutral_band_summer_winter(self, value: float):
+        """Set the neutral band in which the heat pump is deactivated.
+
+        Args:
+            value: The bandwidth in °C
+
+        """
+
+        await self.write("neutral_band_summer_winter", value)
+
+    async def enable_forced_summer_mode(self):
+        """Stop heating, maintain hot water. Force summer mode."""
+
+        await self.write("forced_summer_mode", True)
+
+    async def disable_forced_summer_mode(self):
+        """Do not force summer mode."""
+
+        await self.write("forced_summer_mode", False)
+
+    async def set_silent_mode(self, value: SilentMode):
+        """Set the silent mode level."""
+        await self.write("silent_mode", value)
+
+    async def set_silent_mode_start_time(self, value: time):
+        """Set the time of day at which the silent mode starts."""
+        await self.write("_silent_mode_start_time", SteppedTimeOfDay.to_steps(value))
+
+    async def set_silent_mode_end_time(self, value: time):
+        """Set the time of day at which the silent mode ends."""
+        await self.write("_silent_mode_end_time", SteppedTimeOfDay.to_steps(value))
+
+    async def set_ch_enabled(self):
+        """Enable central heat demand processing."""
+        await self.write("ch_enabled", True)
+
+    async def set_ch_disabled(self):
+        """Disable central heat demand processing."""
+        await self.write("ch_enabled", False)
+
+    async def set_cooling_type(self, value: CoolingType):
+        """Set the type of cooling for this appliance."""
+        await self.write("cooling_type", value)

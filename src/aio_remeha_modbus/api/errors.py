@@ -1,8 +1,10 @@
 """Remeha Modbus API exceptions."""
 
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from aio_remeha_modbus.api.const import ClimateZoneScheduleId
+if TYPE_CHECKING:
+    from aio_remeha_modbus.api.climate_zone import ClimateZoneScheduleId
 
 type Placeholders = dict[str, str | int | bool | Enum | Placeholders]
 """Type declaration for placeholders in a translateable error."""

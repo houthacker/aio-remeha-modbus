@@ -1,7 +1,7 @@
 """Constants for the Remeha Modbus API."""
 
 from datetime import date
-from enum import Enum, StrEnum, auto
+from enum import Enum, IntEnum, StrEnum, auto
 from typing import Final, Self
 
 from pydantic import Field, model_validator
@@ -92,6 +92,18 @@ class ConnectionType(StrEnum):
 
     SERIAL = auto()
     """Serial connection with RTU framer, used with TTY port or USB rs485 converter."""
+
+
+class ClimateZoneScheduleId(IntEnum):
+    """The climate zone time program selected by the user.
+
+    Note: After updating the enum values, **ALWAYS** update the mapping to _attr_preset_modes of RemehaModbusClimateEntity!
+    """
+
+    SCHEDULE_1 = 0
+    SCHEDULE_2 = 1
+    SCHEDULE_3 = 2
+    SCHEDULE_4 = 3
 
 
 # DHW auto scheduling
@@ -396,7 +408,7 @@ class UnitOfTemperature(StrEnum):
     KELVIN = "K"
 
 
-class Weekday(Enum):
+class Weekday(IntEnum):
     """Enumeration for days of the week."""
 
     MONDAY = 0
@@ -406,79 +418,6 @@ class Weekday(Enum):
     FRIDAY = 4
     SATURDAY = 5
     SUNDAY = 6
-
-
-class ClimateZoneFunction(Enum):
-    """Enumerates the available zone functions."""
-
-    DISABLED = 0
-    DIRECT = 1
-    MIXING_CIRCUIT = 2
-    SWIMMING_POOL = 3
-    HIGH_TEMPERATURE = 4
-    FAN_CONVECTOR = 5
-    DHW_TANK = 6
-    ELECTRICAL_DHW_TANK = 7
-    TIME_PROGRAM = 8
-    PROCESS_HEAT = 9
-    DHW_LAYERED = 10
-    DHW_BIC = 11
-    DHW_COMMERCIAL_TANK = 12
-    DHW_PRIMARY = 254
-
-    def is_supported(self) -> bool:
-        """Return whether this `ClimateZoneFunction` is currently supported within this integration."""
-        return self in [
-            ClimateZoneFunction.MIXING_CIRCUIT,
-            ClimateZoneFunction.DHW_PRIMARY,
-        ]
-
-    def has_cooling_capability(self) -> bool:
-        """Return whether this `ClimateZoneFunction` supports cooling."""
-        return self in [
-            ClimateZoneFunction.MIXING_CIRCUIT,
-            ClimateZoneFunction.FAN_CONVECTOR,
-        ]
-
-
-class ClimateZoneHeatingMode(Enum):
-    """The mode the zone is currently functioning in."""
-
-    STANDBY = 0
-    HEATING = 1
-    COOLING = 2
-
-
-class ClimateZoneMode(Enum):
-    """Enumerates the modes a zone can be in."""
-
-    SCHEDULING = 0
-    MANUAL = 1
-    ANTI_FROST = 2
-
-
-class ClimateZoneScheduleId(Enum):
-    """The climate zone time program selected by the user.
-
-    Note: After updating the enum values, **ALWAYS** update the mapping to _attr_preset_modes of RemehaModbusClimateEntity!
-    """
-
-    SCHEDULE_1 = 0
-    SCHEDULE_2 = 1
-    SCHEDULE_3 = 2
-    SCHEDULE_4 = 3
-
-
-class ClimateZoneType(Enum):
-    """Enumerates the available zone types."""
-
-    NOT_PRESENT = 0
-    CH_ONLY = 1
-    CH_AND_COOLING = 2
-    DHW = 3
-    PROCESS_HEAT = 4
-    SWIMMING_POOL = 5
-    OTHER = 254
 
 
 # Reference to Remeha modbus registers
@@ -548,10 +487,6 @@ class ModbusVariableDescription:
         self.count = ensure_register_count() if self.count is None else self.count
 
         return self
-
-
-AUTO_SCHEDULE_DEFAULT_ID: Final[ClimateZoneScheduleId] = ClimateZoneScheduleId.SCHEDULE_1
-"""The default schedule id for auto scheduling."""
 
 
 class MetaRegisters:

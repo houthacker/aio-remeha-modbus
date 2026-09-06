@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from dateutil import tz
-from pymodbus.client import ModbusBaseClient
+from modbus_connection import ModbusUnit
+from modbus_connection.mock import MockModbusUnit
 
 from aio_remeha_modbus.api import RemehaApi
 from aio_remeha_modbus.api.const import (
     REMEHA_ZONE_RESERVED_REGISTERS,
-    ConnectionType,
     ZoneRegisters,
 )
 
@@ -31,25 +31,73 @@ def json_fixture(file_name: str) -> Any:
     return json.loads(data)
 
 
-def get_api(
-    mock_modbus_client: ModbusBaseClient,
-    name: str = "test_api",
-    device_address: int = 100,
-    time_zone: tzinfo | None = tz.gettz(TESTING_TIME_ZONE),
+def get_modbus_unit(api: RemehaApi) -> MockModbusUnit:
+    """Return the modbus unit from the given api.
+
+    Raises:
+        TypeError if the unit is not a `MockModbusUnit`.
+
+    """
+
+    unit = api._unit  # noqa: SLF001
+    if not isinstance(unit, MockModbusUnit):
+        msg = f"Not a MockModbusUnit: {type(unit).__qualname__}"
+        raise TypeError(msg)
+
+    return unit
+
+
+def update_raw_data(api: RemehaApi, data: tuple[int, int] | list[tuple[int, int]]):
+    """Update the modbus data used by the given api.
+
+    Args:
+        api (RemehaApi): The api to use.
+        data (list[tuple[int, int]]): A list of register/value tuples to update.
+
+    """
+
+    unit = get_modbus_unit(api)
+    iterable = data if isinstance(data, list) else [data]
+    for register, value in iterable:
+        unit.holding[register] = value
+
+
+@pytest.fixture
+def remeha_modbus_unit(request, mock_modbus_unit: MockModbusUnit) -> ModbusUnit:
+    """Load the contents of the `request.param` json fixture into the modbus unit."""
+
+    json_file = request.param if hasattr(request, "param") else "modbus_store.json"
+    store: dict[str, str] = json_fixture(json_file)["server"]["registers"]
+    mock_modbus_unit.load_raw(
+        {"holding": {int(key): int(value, 16) for key, value in store.items()}}
+    )
+
+    return mock_modbus_unit
+
+
+@pytest.fixture
+def remeha_api(
+    request,
+    remeha_modbus_unit: MockModbusUnit,
 ) -> RemehaApi:
     """Create a new RemehaApi instance with a mocked modbus client."""
 
     # mock_modbus_client MUST be a mock, otherwise a real connection might be made and mess up the appliance.
-    if not isinstance(mock_modbus_client, Mock):
+    if not isinstance(remeha_modbus_unit, MockModbusUnit):
         pytest.fail(
-            f"Trying to create RemehaApi with non-mocked modbus client type {type(mock_modbus_client).__qualname__}."
+            f"Trying to create RemehaApi with non-mocked modbus client type {type(remeha_modbus_unit).__qualname__}."
         )
+
+    name = request.param.get("name", "test_api") if hasattr(request, "param") else "test_api"
+    time_zone: tzinfo | None = (
+        tz.gettz(request.param.get("time_zone", TESTING_TIME_ZONE))
+        if hasattr(request, "param")
+        else tz.gettz(TESTING_TIME_ZONE)
+    )
 
     return RemehaApi(
         name=name,
-        connection_type=ConnectionType.RTU_OVER_TCP,
-        client=mock_modbus_client,
-        device_address=device_address,
+        unit=remeha_modbus_unit,
         time_zone=time_zone,
     )
 
@@ -65,7 +113,7 @@ def finalizer():
 
 
 @pytest.fixture
-def mock_modbus_client(request) -> Generator[AsyncMock]:
+def _disabled_mock_modbus_client(request) -> Generator[AsyncMock]:
     """Create a mocked pymodbus client.
 
     The registers for the modbus client are retrieved from the `request` and will be

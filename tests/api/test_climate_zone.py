@@ -3,19 +3,19 @@
 import pytest
 from freezegun import freeze_time
 
-from aio_remeha_modbus.api import (
-    DeviceBoardCategory,
-    DeviceBoardType,
-    DeviceInstance,
-)
-from aio_remeha_modbus.api.climate_zone import ClimateZone
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.api.climate_zone import (
+    ClimateZone,
     ClimateZoneFunction,
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from tests.conftest import get_api
+from aio_remeha_modbus.api.system_discovery_table import (
+    DeviceBoard,
+    DeviceBoardCategory,
+    DeviceBoardType,
+)
+from tests.conftest import update_raw_data
 
 
 def test_device_board_category():
@@ -35,34 +35,21 @@ def test_device_board_category():
     assert DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10) != DeviceBoardType.EHC
 
 
-def test_device_instance_equality():
+def test_device_board_read(remeha_modbus_unit):
     """Test the device instance equality is based on it and board type.
 
     This allows HA to update device info if for instance the software version changes.
     """
 
-    assert DeviceInstance(
-        id=3,
-        board_category=DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10),
-        sw_version=(2, 1),
-        hw_version=(1, 1),
-        article_number=7853960,
-    ) == DeviceInstance(
-        id=3,
-        board_category=DeviceBoardCategory(type=DeviceBoardType.EHC, generation=8),
-        sw_version=(2, 2),
-        hw_version=(1, 1),
-        article_number=7802607,
+    device_board = DeviceBoard(unit=remeha_modbus_unit)
+    assert device_board.id == 1
+    assert device_board.board_category == DeviceBoardCategory(
+        type=DeviceBoardType.EHC, generation=8
     )
-
-    # Compare to a different type
-    assert DeviceInstance(
-        id=3,
-        board_category=DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10),
-        sw_version=(2, 1),
-        hw_version=(1, 1),
-        article_number=7853960,
-    ) != DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10)
+    assert device_board.software_version == (1, 1)
+    assert device_board.config_table_version == (1, 2)
+    assert device_board.hardware_version == (2, 1)
+    assert device_board.article_number == 7802607
 
 
 def test_supported_climate_zone_functions():
@@ -87,14 +74,10 @@ def test_supported_climate_zone_functions():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_climate_zone_dhw_get_current_setpoint(mock_modbus_client):
+async def test_climate_zone_dhw_get_current_setpoint(remeha_api):
     """Test retrieval of the current setpoint of a climate zone."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(
-        id=2, appliance=await api.async_read_appliance()
-    )
+    zone: ClimateZone | None = remeha_api.zones[1]
     assert zone is not None
 
     assert zone.is_domestic_hot_water()
@@ -104,31 +87,31 @@ async def test_climate_zone_dhw_get_current_setpoint(mock_modbus_client):
     zone.dhw_reduced_setpoint = 25
 
     # Validate setpoint in SCHEDULING mode
-    zone.mode = ClimateZoneMode.SCHEDULING
-    assert zone.current_setpoint != -1
+    update_raw_data(remeha_api, (649 + 512, ClimateZoneMode.SCHEDULING))
+    await zone.async_update()
+    assert await zone.async_get_current_setpoint() != -1
 
     # Validate setpoint in MANUAL mode
-    zone.mode = ClimateZoneMode.MANUAL
-    assert zone.current_setpoint == 55
+    update_raw_data(remeha_api, (649 + 512, ClimateZoneMode.MANUAL))
+    await zone.async_update()
+    assert await zone.async_get_current_setpoint() == 55
 
     # Validate setpoint in ANTI_FROST mode
-    zone.mode = ClimateZoneMode.ANTI_FROST
-    assert zone.current_setpoint == 25
+    update_raw_data(remeha_api, (649 + 512, ClimateZoneMode.ANTI_FROST))
+    await zone.async_update()
+    assert await zone.async_get_current_setpoint() == 25
 
     # Validate setpoint in unsupported type
-    zone.type = ClimateZoneType.SWIMMING_POOL
-    assert zone.current_setpoint == -1
+    update_raw_data(remeha_api, (640 + 512, ClimateZoneType.SWIMMING_POOL))
+    await zone.async_update()
+    assert await zone.async_get_current_setpoint() == -1
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store_ch_scheduling.json"], indirect=True)
-async def test_climate_zone_ch_get_current_cooling_setpoint(mock_modbus_client):
+async def test_climate_zone_ch_get_current_cooling_setpoint(remeha_api):
     """Test retrieval of the current setpoint of a CH climate zone."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(
-        id=1, appliance=await api.async_read_appliance()
-    )
+    zone: ClimateZone | None = remeha_api.zones[1]
     assert zone is not None
 
     assert not zone.is_domestic_hot_water()
@@ -146,30 +129,26 @@ async def test_climate_zone_ch_get_current_cooling_setpoint(mock_modbus_client):
     # 18:00 - 21:00 COMFORT
     # 21:00 - 00:00 EVENING
     with freeze_time("2026-06-01 00:00:00", tz_offset=-2):
-        assert zone.current_setpoint == 20.5
+        assert await zone.async_get_current_setpoint() == 20.5
 
     with freeze_time("2026-06-01 07:00:00", tz_offset=-2):
-        assert zone.current_setpoint == 21.5
+        assert await zone.async_get_current_setpoint() == 21.5
 
     with freeze_time("2026-06-01 15:00:00", tz_offset=-2):
-        assert zone.current_setpoint == 21.0
+        assert await zone.async_get_current_setpoint() == 21.0
 
     with freeze_time("2026-06-01 18:00:00", tz_offset=-2):
-        assert zone.current_setpoint == 20.0
+        assert await zone.async_get_current_setpoint() == 20.0
 
     with freeze_time("2026-06-01 21:00:00", tz_offset=-2):
-        assert zone.current_setpoint == 22.0
+        assert await zone.async_get_current_setpoint() == 22.0
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_climate_zone_set_current_setpoint(mock_modbus_client):
+async def test_climate_zone_set_current_setpoint(remeha_api):
     """Test setting the current setpoint of a DHW zone."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(
-        id=2, appliance=await api.async_read_appliance()
-    )
+    zone: ClimateZone | None = remeha_api.zones[1]
     assert zone is not None
 
     # Prepare setpoint values
@@ -179,12 +158,18 @@ async def test_climate_zone_set_current_setpoint(mock_modbus_client):
     zone.temporary_setpoint = -1
 
     # Validate setpoint for CH zone in MANUAL mode
-    zone.mode = ClimateZoneMode.MANUAL
-    zone.type = ClimateZoneType.OTHER
-    zone.function = ClimateZoneFunction.MIXING_CIRCUIT
+    update_raw_data(
+        remeha_api,
+        [
+            (649 + 512, ClimateZoneMode.MANUAL),
+            (640 + 512, ClimateZoneType.OTHER),
+            (641 + 512, ClimateZoneFunction.MIXING_CIRCUIT),
+        ],
+    )
+    await zone.async_update()
 
-    zone.current_setpoint = 20.5
-    assert zone.current_setpoint == 20.5
+    zone.set_current_setpoint(20.5)
+    assert await zone.async_get_current_setpoint() == 20.5
     assert zone.room_setpoint == 20.5
     assert zone.dhw_comfort_setpoint == -1
     assert zone.dhw_reduced_setpoint == -1
@@ -193,12 +178,18 @@ async def test_climate_zone_set_current_setpoint(mock_modbus_client):
     zone.room_setpoint = -1
 
     # Validate setpoint for DHW zone in MANUAL mode
-    zone.type = ClimateZoneType.OTHER
-    zone.function = ClimateZoneFunction.DHW_PRIMARY
-    zone.mode = ClimateZoneMode.MANUAL
+    update_raw_data(
+        remeha_api,
+        [
+            (649 + 512, ClimateZoneMode.MANUAL),
+            (640 + 512, ClimateZoneType.OTHER),
+            (641 + 512, ClimateZoneFunction.DHW_PRIMARY),
+        ],
+    )
+    await zone.async_update()
 
-    zone.current_setpoint = 50
-    assert zone.current_setpoint == 50
+    zone.set_current_setpoint(50)
+    assert await zone.async_get_current_setpoint() == 50
     assert zone.dhw_comfort_setpoint == 50
     assert zone.dhw_reduced_setpoint == -1
     assert zone.room_setpoint == -1
@@ -207,10 +198,11 @@ async def test_climate_zone_set_current_setpoint(mock_modbus_client):
     zone.dhw_comfort_setpoint = -1
 
     # Validate setpoint for DHW zone in SCHEDULING mode
-    zone.mode = ClimateZoneMode.SCHEDULING
+    update_raw_data(remeha_api, (649 + 512, ClimateZoneMode.SCHEDULING))
+    await zone.async_update()
 
-    zone.current_setpoint = 50
-    assert zone.current_setpoint == -1
+    zone.set_current_setpoint(50)
+    assert await zone.async_get_current_setpoint() == -1
     assert zone.dhw_comfort_setpoint == -1
     assert zone.dhw_reduced_setpoint == -1
     assert zone.room_setpoint == -1
@@ -219,10 +211,11 @@ async def test_climate_zone_set_current_setpoint(mock_modbus_client):
     zone.temporary_setpoint = -1
 
     # Validate setpoint for DHW zone in ANTI_FROST mode
-    zone.mode = ClimateZoneMode.ANTI_FROST
+    update_raw_data(remeha_api, (649 + 512, ClimateZoneMode.ANTI_FROST))
+    await zone.async_update()
 
-    zone.current_setpoint = 25
-    assert zone.current_setpoint == 25
+    zone.set_current_setpoint(25)
+    assert await zone.async_get_current_setpoint() == 25
     assert zone.dhw_comfort_setpoint == -1
     assert zone.dhw_reduced_setpoint == 25
     assert zone.room_setpoint == -1
@@ -231,47 +224,44 @@ async def test_climate_zone_set_current_setpoint(mock_modbus_client):
     zone.dhw_reduced_setpoint = -1
 
     # Validate setpoint outside of min/max values
-    zone.current_setpoint = 25
-    assert zone.current_setpoint == 25
+    zone.set_current_setpoint(25)
+    assert await zone.async_get_current_setpoint() == 25
 
     # Try to update
-    zone.current_setpoint = zone.min_temp - 1.0
-    assert zone.current_setpoint == 25
+    zone.set_current_setpoint(zone.min_temp - 1.0)
+    assert await zone.async_get_current_setpoint() == 25
 
-    zone.current_setpoint = zone.max_temp + 1.0
-    assert zone.current_setpoint == 25
+    zone.set_current_setpoint(zone.max_temp + 1.0)
+    assert await zone.async_get_current_setpoint() == 25
 
     # Validate setting setpoint for unsupported zone
-    zone.type = ClimateZoneType.SWIMMING_POOL
-    zone.current_setpoint = 30
-    assert zone.current_setpoint == -1  # Unsupported zones report -1
+    update_raw_data(remeha_api, (640 + 512, ClimateZoneType.SWIMMING_POOL))
+    await zone.async_update()
+
+    zone.set_current_setpoint(30)
+    assert await zone.async_get_current_setpoint() == -1  # Unsupported zones report -1
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_climate_zone_get_current_temperature(mock_modbus_client):
+async def test_climate_zone_get_current_temperature(remeha_api):
     """Test the retrieval of the current temperature of a climate zone."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(
-        id=2, appliance=await api.async_read_appliance()
-    )
+    zone: ClimateZone | None = remeha_api.zones[1]
     assert zone is not None
 
     assert zone.is_domestic_hot_water()
     assert zone.current_temparature == 53.2
 
-    zone.type = ClimateZoneType.SWIMMING_POOL
+    update_raw_data(remeha_api, (640 + 512, ClimateZoneType.SWIMMING_POOL))
+    await zone.async_update()
     assert zone.current_temparature == -1
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_climate_zone_equality(mock_modbus_client):
+async def test_climate_zone_equality(remeha_api):
     """Test the equality of climate zones."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zones: list[ClimateZone] = await api.async_read_zones(await api.async_read_appliance())
+    zones: list[ClimateZone] = remeha_api.zones
 
     assert zones[0] != zones[1]
     assert zones[1] != ClimateZoneMode.MANUAL
@@ -280,22 +270,22 @@ async def test_climate_zone_equality(mock_modbus_client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store_ch_scheduling.json"], indirect=True)
-async def test_scheduling_temporary_setpoint(mock_modbus_client):
+@pytest.mark.parametrize("remeha_modbus_unit", ["modbus_store_ch_scheduling.json"], indirect=True)
+async def test_scheduling_temporary_setpoint(remeha_api):
     """Test that a temporary setpoint can be set if the zone is in scheduling mode."""
 
     # Retrieve a single zone.
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(1, await api.async_read_appliance())
+    zone: ClimateZone | None = remeha_api.zones[0]
     assert zone is not None
     assert zone.selected_schedule == ClimateZoneScheduleId.SCHEDULE_4
 
     # Override the setpoint
-    assert zone.current_setpoint is not None
-    current_setpoint: float = zone.current_setpoint
+    assert await zone.async_get_current_setpoint() is not None
+    current_setpoint: float | None = await zone.async_get_current_setpoint()
+    assert current_setpoint is not None
     temporary_setpoint = current_setpoint + 1
 
-    zone.current_setpoint = temporary_setpoint
+    zone.set_current_setpoint(temporary_setpoint)
 
     # Temporary override for CH zones not yet implemented.
-    assert zone.current_setpoint != temporary_setpoint
+    assert await zone.async_get_current_setpoint() != temporary_setpoint

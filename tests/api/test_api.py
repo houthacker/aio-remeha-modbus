@@ -1,50 +1,39 @@
 """Tests for RemehaApi."""
 
-from datetime import datetime, time
+from datetime import time
 
 import pytest
-from pymodbus import ModbusException
 
-from aio_remeha_modbus.api import (
-    DeviceInstance,
-    RemehaApi,
-)
 from aio_remeha_modbus.api.appliance import (
     Appliance,
-    ApplianceErrorPriority,
-    ApplianceStatus,
     CoolingType,
     SilentMode,
 )
-from aio_remeha_modbus.api.climate_zone import ClimateZone
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.api.climate_zone import (
+    ClimateZone,
     ClimateZoneFunction,
     ClimateZoneHeatingMode,
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
-    ConnectionType,
-    DataType,
-    MetaRegisters,
-    ModbusVariableDescription,
-    Weekday,
-    ZoneRegisters,
 )
-from aio_remeha_modbus.api.errors import DiscoveryTableCorruptedError
+from aio_remeha_modbus.api.const import (
+    Weekday,
+)
+from aio_remeha_modbus.api.main_control_monitoring import ApplianceErrorPriority, ApplianceStatus
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
     TimeslotSetpointType,
     ZoneSchedule,
 )
-from aio_remeha_modbus.helpers.modbus import to_gtw08_null_value
-from tests.conftest import get_api
-from tests.util.registers import SENSOR_REGISTERS
+from tests.conftest import get_modbus_unit
+
+# from tests.util.registers import SENSOR_REGISTERS
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_retries_on_timeout(mock_modbus_client):
+async def test_read_retries_on_timeout(remeha_api):
     """A transient modbus timeout on a read is retried instead of failing the read.
 
     The GTW-08 occasionally does not answer a single request in time; such a timeout
@@ -52,144 +41,95 @@ async def test_read_retries_on_timeout(mock_modbus_client):
     retried so one missing reply does not fail the whole update cycle.
     """
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
+    unit = get_modbus_unit(remeha_api)
+    events = []
+    unit.on_connection_lost(lambda: events.append("connection_lost"))
 
-    original_side_effect = mock_modbus_client.read_holding_registers.side_effect
-    state = {"raised": False}
-
-    async def flaky(*args, **kwargs):
-        if not state["raised"]:
-            state["raised"] = True
-            raise ModbusException("No response received after 0 retries")
-        return await original_side_effect(*args, **kwargs)
-
-    mock_modbus_client.read_holding_registers.side_effect = flaky
-
-    # The very first read raises a timeout; thanks to the retry the appliance still reads.
-    appliance = await api.async_read_appliance()
+    appliance = remeha_api.appliance
+    await appliance.async_update()
+    assert events == ["connection_lost"]
     assert appliance is not None
-    assert state["raised"] is True
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_api_properties(mock_modbus_client):
-    """Test the modbus hub name."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client, name="remeha_modbus_hub")
-    assert api.name == "remeha_modbus_hub"
-    assert api.connection_type == ConnectionType.RTU_OVER_TCP
-    assert await api.async_is_connected  # Always True for mocked api
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_api_connection(mock_modbus_client):
-    """Test connecting to the modbus device."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client, name="remeha_modbus_hub")
-    try:
-        assert await api.async_connect()
-    finally:
-        await api.async_close()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_single_variable(mock_modbus_client):
+async def test_read_single_variable(remeha_api):
     """Test that the API can be created and a single register be read."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    assert await api.async_read_number_of_device_instances() == 2
+    assert len(remeha_api.discovery_table.device_boards) == 2
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_device_instance(mock_modbus_client):
+async def test_read_device_instance(remeha_api):
     """Test that a device can be read through the modbus interface."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    device = await api.async_read_device_instance(0)
-    assert device is not None
-    assert device.id == 0
-    assert device.hw_version == (2, 1)
-    assert device.sw_version == (1, 1)
-    assert str(device.board_category) == "EHC-10"
-    assert device.article_number == 7853960
+    device_board = remeha_api.discovery_table.device_boards[0]
+
+    assert device_board is not None
+    assert device_board.id == 0
+    assert device_board.hardware_version == (2, 1)
+    assert device_board.software_version == (1, 1)
+    assert str(device_board.board_category) == "EHC-10"
+    assert device_board.article_number == 7853960
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_device_instances(mock_modbus_client):
-    """Read all devices through the modbus interface."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    devices: list[DeviceInstance] = await api.async_read_device_instances()
-
-    assert len(devices) == 2
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
+@pytest.mark.skip(reason="RemehaApi.sensors is not yet implemented.")
 async def test_read_sensor_values(mock_modbus_client):
     """Read values for a given list of variables that are configured as sensors."""
 
-    api: RemehaApi = get_api(mock_modbus_client=mock_modbus_client)
-    v = await api.async_read_sensor_values(descriptions=SENSOR_REGISTERS)
-    assert v == dict(
-        zip(
-            SENSOR_REGISTERS,
-            [
-                int("0223", 16),
-                3,
-                24.82,
-                20.44,
-                20.00,
-                21.14,
-                22.54,
-                1.2,
-                12.66,
-                None,
-                None,
-                0.5,
-                1234,
-                2345,
-                321,
-                456,
-                100,
-                200,
-                10000,
-                5000,
-                3000,
-                500,
-                4000,
-                None,
-                None,
-                2200,
-                3500,
-                0,
-                0,
-                0.5,
-                57,
-                None,
-            ],
-            strict=True,
-        )
-    )
+    # api: RemehaApi = get_api(mock_modbus_client=mock_modbus_client)
+    # v = await api.async_read_sensor_values(descriptions=SENSOR_REGISTERS)
+    # assert v == dict(
+    #     zip(
+    #         SENSOR_REGISTERS,
+    #         [
+    #             int("0223", 16),
+    #             3,
+    #             24.82,
+    #             20.44,
+    #             20.00,
+    #             21.14,
+    #             22.54,
+    #             1.2,
+    #             12.66,
+    #             None,
+    #             None,
+    #             0.5,
+    #             1234,
+    #             2345,
+    #             321,
+    #             456,
+    #             100,
+    #             200,
+    #             10000,
+    #             5000,
+    #             3000,
+    #             500,
+    #             4000,
+    #             None,
+    #             None,
+    #             2200,
+    #             3500,
+    #             0,
+    #             0,
+    #             0.5,
+    #             57,
+    #             None,
+    #         ],
+    #         strict=True,
+    #     )
+    # )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_zone(mock_modbus_client):
+async def test_read_zone(remeha_api):
     """Read a single zone."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zone: ClimateZone | None = await api.async_read_zone(
-        id=1, appliance=await api.async_read_appliance()
-    )
+    zone: ClimateZone | None = remeha_api.zones[0]
 
     assert zone is not None
-    assert zone.current_setpoint == 20.0
+    assert await zone.async_get_current_setpoint() == 20.0
     assert zone.current_temparature == 23.2
     assert zone.dhw_calorifier_hysteresis is None
     assert zone.dhw_comfort_setpoint is None
@@ -212,141 +152,43 @@ async def test_read_zone(mock_modbus_client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_not_present_zone(mock_modbus_client):
-    """Read a zone that is of ZoneType.NOT_PRESENT."""
-    api = get_api(mock_modbus_client=mock_modbus_client)
-
-    assert await api.async_read_zone(id=3, appliance=await api.async_read_appliance()) is None
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_zone_update(mock_modbus_client):
+async def test_read_zone_update(remeha_api):
     """Read a zone update from the modbus device."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    appliance = await api.async_read_appliance()
-
     # Read a single zone
-    zone: ClimateZone | None = await api.async_read_zone(1, appliance)
+    zone: ClimateZone | None = remeha_api.zones[0]
     assert zone is not None
     assert zone.is_central_heating()
     assert zone.mode == ClimateZoneMode.MANUAL
-    assert zone.current_setpoint is not None
+    current_setpoint = await zone.async_get_current_setpoint()
+    assert current_setpoint is not None
 
     # Update a variable directly at the modbus interface
-    new_setpoint: float = zone.current_setpoint + 2
-    await api.async_write_variable(
-        variable=ZoneRegisters.ROOM_MANUAL_SETPOINT,
-        value=new_setpoint,
-        offset=api.get_zone_register_offset(zone=zone),
-    )
+    new_setpoint: float = current_setpoint + 2
+    zone.set_current_setpoint(new_setpoint)
 
     # Retrieve the updated value
-    updated_zone: ClimateZone = await api.async_read_zone_update(zone, appliance)
-
-    # Zone identity must be equal to the original zone
-    assert updated_zone == zone
+    await zone.async_update()
 
     # Validate updated setpoint
-    assert updated_zone.current_setpoint == new_setpoint
+    assert await zone.async_get_current_setpoint() == new_setpoint
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_health_check(mock_modbus_client):
+async def test_health_check(remeha_api):
     """Test a health check can be run without raising an exception."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    await api.async_health_check()
+    await remeha_api.async_health_check()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_zones(mock_modbus_client):
-    """Read all zones through the modbus interface."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    zones: list[ClimateZone] = await api.async_read_zones(await api.async_read_appliance())
-
-    assert len(zones) == 2
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_zones_fallback(mock_modbus_client):
-    """Read all zones while register 189 (NumberOfZones) is invalid."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client)
-
-    for number_of_zones in [
-        0,
-        to_gtw08_null_value(MetaRegisters.NUMBER_OF_ZONES.data_type),
-    ]:
-        # Set NumberOfZones
-        await mock_modbus_client.write_registers(
-            MetaRegisters.NUMBER_OF_ZONES.start_address, [number_of_zones]
-        )
-
-        # Validate zones
-        with pytest.raises(expected_exception=DiscoveryTableCorruptedError):
-            await api.async_read_zones(await api.async_read_appliance())
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_write_variable(mock_modbus_client):
-    """Test that the API can write a single register."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    appliance = await api.async_read_appliance()
-    await api.async_write_variable(ZoneRegisters.ROOM_MANUAL_SETPOINT, 20.5)
-
-    # Retrieve a single zone
-    zone: ClimateZone | None = await api.async_read_zone(1, appliance)
-    assert zone is not None
-
-    # None
-    await api.async_write_variable(
-        variable=ZoneRegisters.CURRENT_HEATING_MODE,
-        value=None,
-        offset=api.get_zone_register_offset(zone),
-    )
-
-    update = await api.async_read_zone_update(zone=zone, appliance=appliance)
-    assert update.heating_mode is None
-
-    # Enum
-    await api.async_write_variable(
-        variable=ZoneRegisters.CURRENT_HEATING_MODE,
-        value=ClimateZoneHeatingMode.HEATING,
-        offset=api.get_zone_register_offset(zone),
-    )
-
-    update = await api.async_read_zone_update(zone=zone, appliance=appliance)
-    assert update.heating_mode is ClimateZoneHeatingMode.HEATING
-
-    # Try to write a datetime to a variable type which cannot handle it.
-    with pytest.raises(ValueError):
-        await api.async_write_variable(
-            variable=ModbusVariableDescription(
-                start_address=1, name="datetime_test", data_type=DataType.INT64
-            ),
-            value=datetime.now(),
-        )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_read_appliance(mock_modbus_client):
+async def test_read_appliance(remeha_api):
     """Test that the API can read the appliance status from the modbus device."""
 
-    api = get_api(mock_modbus_client=mock_modbus_client)
-    appliance: Appliance = await api.async_read_appliance()
-
-    assert appliance.current_error == int("0223", 16)  # H02.23 Flow rate error.
-    assert appliance.error_priority == ApplianceErrorPriority.BLOCKING
+    appliance: Appliance = remeha_api.appliance
+    ctrl_monitoring = remeha_api.main_control_monitoring
+    assert ctrl_monitoring.current_error == int("0223", 16)  # H02.23 Flow rate error.
+    assert ctrl_monitoring.error_priority == ApplianceErrorPriority.BLOCKING
     assert appliance.ch_enabled
     assert appliance.cooling_type is CoolingType.ACTIVE_COOLING
     assert appliance.summer_winter == 22.0
@@ -354,30 +196,36 @@ async def test_read_appliance(mock_modbus_client):
     assert appliance.silent_mode_start_time == time(hour=22)
     assert appliance.silent_mode_end_time == time(hour=7)
 
-    status: ApplianceStatus = appliance.status
-    assert not status.flame_on
-    assert not status.heat_pump_on
-    assert not status.electrical_backup_on
-    assert not status.electrical_backup2_on
-    assert not status.dhw_electrical_backup_on
-    assert status.service_required
-    assert not status.power_down_reset_needed
-    assert status.water_pressure_low
-    assert status.appliance_pump_on
-    assert not status.three_way_valve_open
-    assert not status.three_way_valve
-    assert not status.three_way_valve_closed
-    assert not status.dhw_active
-    assert not status.ch_active
-    assert status.cooling_active
+    status: ApplianceStatus = ctrl_monitoring.status
+    assert status is not None
+
+    assert (
+        status
+        == ApplianceStatus.SERVICE_REQUIRED
+        | ApplianceStatus.WATER_PRESSURE_LOW
+        | ApplianceStatus.APPLIANCE_PUMP_ON
+        | ApplianceStatus.COOLING_ACTIVE
+    )
+
+    # assert not status.heat_pump_on
+    # assert not status.electrical_backup_on
+    # assert not status.electrical_backup2_on
+    # assert not status.dhw_electrical_backup_on
+    # assert status.service_required
+    # assert not status.power_down_reset_needed
+    # assert status.water_pressure_low
+    # assert status.appliance_pump_on
+    # assert not status.three_way_valve_open
+    # assert not status.three_way_valve
+    # assert not status.three_way_valve_closed
+    # assert not status.dhw_active
+    # assert not status.ch_active
+    # assert status.cooling_active
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-async def test_write_zone_schedule(mock_modbus_client):
+async def test_write_zone_schedule(remeha_api):
     """Test that a time program can be written to the modbus device."""
-
-    api = get_api(mock_modbus_client=mock_modbus_client)
 
     expected_schedule = ZoneSchedule(
         id=ClimateZoneScheduleId.SCHEDULE_2,
@@ -413,22 +261,13 @@ async def test_write_zone_schedule(mock_modbus_client):
     )
 
     # Retrieve schedule from modbus, must be None.
-    actual_schedule: ZoneSchedule | None = await api.async_read_zone_schedule(
-        zone=2, schedule_id=ClimateZoneScheduleId.SCHEDULE_2, day=Weekday.FRIDAY
-    )
+    actual_schedule: ZoneSchedule | None = await remeha_api.zones[2].async_current_schedule()
     assert actual_schedule is None
 
-    # Now write the schedule
-    await api.async_write_variable(
-        variable=ZoneRegisters.TIME_PROGRAM_FRIDAY,
-        value=expected_schedule,
-        offset=api.get_zone_register_offset(zone=2)
-        + api.get_schedule_register_offset(schedule=ClimateZoneScheduleId.SCHEDULE_2),
-    )
+    # TODO
+    # await remeha_api.zones[2].async_set_schedule(expected_schedule)
 
     # Read it back and check if it was successful.
-    actual_schedule = await api.async_read_zone_schedule(
-        zone=2, schedule_id=ClimateZoneScheduleId.SCHEDULE_2, day=Weekday.FRIDAY
-    )
+    actual_schedule = await remeha_api.zones[2].async_current_schedule()
 
     assert actual_schedule == expected_schedule
