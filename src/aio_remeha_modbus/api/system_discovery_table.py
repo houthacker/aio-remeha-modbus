@@ -6,7 +6,8 @@ from functools import cached_property
 from modbus_connection.model import Component, bits, repeating_group, uint32
 from pydantic.dataclasses import dataclass
 
-from aio_remeha_modbus.helpers.modbus import uint8, uint16
+from aio_remeha_modbus.api.const import REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS
+from aio_remeha_modbus.helpers.fields import uint8, uint16
 
 
 class DeviceBoardType(IntEnum):
@@ -108,7 +109,10 @@ class DeviceBoard(Component):
     def id(self) -> int:
         """The board sequence id."""
 
-        return self._index
+        resolved = self.resolved_fields["_type"]
+        address = resolved.address - 129  # normalize address
+
+        return int(address / REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS)
 
     @cached_property
     def board_category(self) -> DeviceBoardCategory | None:
@@ -188,9 +192,12 @@ class SystemDiscoveryTable(Component):
     device_boards = repeating_group(
         uint8(address=128),  # number of device boards
         component_class=DeviceBoard,
-        stride=5,
+        stride=REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS,
     )
     """The list of device boards available on the appliance."""
+
+    number_of_zones = uint8(address=189)
+    """The number of zones present on the appliance."""
 
     async def reset(self):
         """Reset the discovery table.

@@ -2,7 +2,9 @@
 
 from enum import IntEnum, IntFlag, auto
 
-from modbus_connection.model import Component, enum, flags, integer
+from modbus_connection.model import Component, enum, flags
+
+from aio_remeha_modbus.helpers.fields import uint16
 
 
 class ApplianceDemandStatus(IntFlag):
@@ -55,49 +57,49 @@ class ApplianceErrorPriority(IntEnum):
 class ApplianceStatus(IntFlag):
     """The appliance status shows various boolean status fields about the appliance."""
 
-    FLAME_ON = auto()
+    FLAME_ON = 2**16
     """Whether the appliance flame is on."""
 
-    HEAT_PUMP_ON = auto()
+    HEAT_PUMP_ON = 2**17
     """Whether the appliance heat pump is on."""
 
-    ELECTRICAL_BACKUP_ON = auto()
+    ELECTRICAL_BACKUP_ON = 2**18
     """Whether the central heating electrical backup is on."""
 
-    ELECTRICAL_BACKUP2_ON = auto()
+    ELECTRICAL_BACKUP2_ON = 2**19
     """Whether the 2nd central heating electrical backup is on."""
 
-    DHW_ELECTRICAL_BACKUP_ON = auto()
+    DHW_ELECTRICAL_BACKUP_ON = 2**20
     """Whether the DHW electrical backup is on."""
 
-    SERVICE_REQUIRED = auto()
+    SERVICE_REQUIRED = 2**21
     """Whether the appliance requires service."""
 
-    POWER_DOWN_RESET_NEEDED = auto()
+    POWER_DOWN_RESET_NEEDED = 2**22
     """Whether the appliance must be powered down and reset. Leave it powered off at least 20 seconds."""
 
-    WATER_PRESSURE_LOW = auto()
+    WATER_PRESSURE_LOW = 2**23
     """Whether the water pressure is low."""
 
-    APPLIANCE_PUMP_ON = auto()
+    APPLIANCE_PUMP_ON = 2**0
     """Whether the main pump is on."""
 
-    THREE_WAY_VALVE_OPEN = auto()
+    THREE_WAY_VALVE_OPEN = 2**1
     """Whether the 3-way valve is open."""
 
-    THREE_WAY_VALVE = auto()
+    THREE_WAY_VALVE = 2**2
     """Unknown, but relate to 3-way valve obviously."""
 
-    THREE_WAY_VALVE_CLOSED = auto()
+    THREE_WAY_VALVE_CLOSED = 2**3
     """Whether the 3-way valve is closed."""
 
-    DHW_ACTIVE = auto()
+    DHW_ACTIVE = 2**4
     """Whether the DHW system is active."""
 
-    CH_ACTIVE = auto()
+    CH_ACTIVE = 2**5
     """Whether the CH system is active."""
 
-    COOLING_ACTIVE = auto()
+    COOLING_ACTIVE = 2**6
     """Whether the cooling system is active."""
 
 
@@ -107,7 +109,7 @@ class MainControlMonitoring(Component):
     demand_status = flags(address=275, flag_type=ApplianceDemandStatus)
     """Status bitfield of the appliance."""
 
-    current_error = integer(address=277, signed=False, nan=0xFFFF)
+    current_error = uint16(address=277)
     """The current error, encoded in two unsigned bytes. `None` means no error.
 
     The joined bytes show the error that can be looked up in the manual

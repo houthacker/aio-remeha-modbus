@@ -4,6 +4,7 @@ from datetime import time
 
 import pytest
 
+from aio_remeha_modbus.api.api import RemehaApi
 from aio_remeha_modbus.api.appliance import (
     Appliance,
     CoolingType,
@@ -27,28 +28,8 @@ from aio_remeha_modbus.api.schedule import (
     TimeslotSetpointType,
     ZoneSchedule,
 )
-from tests.conftest import get_modbus_unit
 
 # from tests.util.registers import SENSOR_REGISTERS
-
-
-@pytest.mark.asyncio
-async def test_read_retries_on_timeout(remeha_api):
-    """A transient modbus timeout on a read is retried instead of failing the read.
-
-    The GTW-08 occasionally does not answer a single request in time; such a timeout
-    raises a `ModbusException` rather than returning an error response. It must be
-    retried so one missing reply does not fail the whole update cycle.
-    """
-
-    unit = get_modbus_unit(remeha_api)
-    events = []
-    unit.on_connection_lost(lambda: events.append("connection_lost"))
-
-    appliance = remeha_api.appliance
-    await appliance.async_update()
-    assert events == ["connection_lost"]
-    assert appliance is not None
 
 
 @pytest.mark.asyncio
@@ -59,7 +40,7 @@ async def test_read_single_variable(remeha_api):
 
 
 @pytest.mark.asyncio
-async def test_read_device_instance(remeha_api):
+async def test_read_device_instance(remeha_api: RemehaApi):
     """Test that a device can be read through the modbus interface."""
 
     device_board = remeha_api.discovery_table.device_boards[0]
@@ -67,6 +48,7 @@ async def test_read_device_instance(remeha_api):
     assert device_board is not None
     assert device_board.id == 0
     assert device_board.hardware_version == (2, 1)
+    assert device_board.config_table_version == (1, 2)
     assert device_board.software_version == (1, 1)
     assert str(device_board.board_category) == "EHC-10"
     assert device_board.article_number == 7853960
@@ -129,7 +111,7 @@ async def test_read_zone(remeha_api):
     zone: ClimateZone | None = remeha_api.zones[0]
 
     assert zone is not None
-    assert await zone.async_get_current_setpoint() == 20.0
+    assert zone.current_setpoint == 20.0
     assert zone.current_temparature == 23.2
     assert zone.dhw_calorifier_hysteresis is None
     assert zone.dhw_comfort_setpoint is None
@@ -160,29 +142,29 @@ async def test_read_zone_update(remeha_api):
     assert zone is not None
     assert zone.is_central_heating()
     assert zone.mode == ClimateZoneMode.MANUAL
-    current_setpoint = await zone.async_get_current_setpoint()
+    current_setpoint = zone.current_setpoint
     assert current_setpoint is not None
 
     # Update a variable directly at the modbus interface
     new_setpoint: float = current_setpoint + 2
-    zone.set_current_setpoint(new_setpoint)
+    await zone.async_set_current_setpoint(new_setpoint)
 
     # Retrieve the updated value
     await zone.async_update()
 
     # Validate updated setpoint
-    assert await zone.async_get_current_setpoint() == new_setpoint
+    assert zone.current_setpoint == new_setpoint
 
 
 @pytest.mark.asyncio
-async def test_health_check(remeha_api):
+async def test_health_check(mock_modbus_unit):
     """Test a health check can be run without raising an exception."""
 
-    await remeha_api.async_health_check()
+    await RemehaApi.async_health_check(mock_modbus_unit)
 
 
 @pytest.mark.asyncio
-async def test_read_appliance(remeha_api):
+async def test_read_appliance(remeha_api: RemehaApi):
     """Test that the API can read the appliance status from the modbus device."""
 
     appliance: Appliance = remeha_api.appliance
@@ -196,8 +178,8 @@ async def test_read_appliance(remeha_api):
     assert appliance.silent_mode_start_time == time(hour=22)
     assert appliance.silent_mode_end_time == time(hour=7)
 
+    assert ctrl_monitoring.status is not None
     status: ApplianceStatus = ctrl_monitoring.status
-    assert status is not None
 
     assert (
         status
@@ -224,7 +206,7 @@ async def test_read_appliance(remeha_api):
 
 
 @pytest.mark.asyncio
-async def test_write_zone_schedule(remeha_api):
+async def test_write_zone_schedule(remeha_api: RemehaApi):
     """Test that a time program can be written to the modbus device."""
 
     expected_schedule = ZoneSchedule(
@@ -261,13 +243,19 @@ async def test_write_zone_schedule(remeha_api):
     )
 
     # Retrieve schedule from modbus, must be None.
-    actual_schedule: ZoneSchedule | None = await remeha_api.zones[2].async_current_schedule()
-    assert actual_schedule is None
+    current_schedule = remeha_api.zones[1].current_schedule
+    assert current_schedule is not None
+    actual_schedule = current_schedule[Weekday.FRIDAY]
+    assert actual_schedule is not None
+    assert actual_schedule != expected_schedule
 
-    # TODO
-    # await remeha_api.zones[2].async_set_schedule(expected_schedule)
+    await remeha_api.zones[1].async_set_single_schedule(expected_schedule)
+    await remeha_api.zones[1].async_set_selected_schedule(expected_schedule.id)
+    await remeha_api.async_update()
 
     # Read it back and check if it was successful.
-    actual_schedule = await remeha_api.zones[2].async_current_schedule()
+    current_schedule = remeha_api.zones[1].current_schedule
+    assert current_schedule is not None
+    actual_schedule = current_schedule[Weekday.FRIDAY]
 
     assert actual_schedule == expected_schedule

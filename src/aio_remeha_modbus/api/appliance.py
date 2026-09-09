@@ -3,8 +3,9 @@
 from datetime import time
 from enum import IntEnum
 
-from modbus_connection.model import Component, boolean, enum, gauge, integer
+from modbus_connection.model import Component, boolean, enum
 
+from aio_remeha_modbus.helpers.fields import int16, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 
 
@@ -60,20 +61,16 @@ class Appliance(Component):
     the other available api types, like appliance error status or burning hours counters.
     """
 
-    outside_temperature = gauge(address=384, scale=0.01, nan=0x8000, unit="°C")
+    outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""
 
     season_mode = enum(address=385, enum_type=SeasonalMode, signed=False)
     """Which season mode is currently active."""
 
-    summer_winter = gauge(
-        address=386, scale=0.01, signed=False, nan=0xFFFF, writable=True, unit="°C"
-    )
+    summer_winter = uint16(address=386, scale=0.01, writable=True, unit="°C")
     """Upper limit of outdoor temperature for heating."""
 
-    neutral_band_summer_winter = gauge(
-        address=387, scale=0.01, signed=False, writable=True, unit="°C"
-    )
+    neutral_band_summer_winter = uint16(address=387, scale=0.01, unit="°C")
     """Temperature band below the summer/winter limit within which the appliance
     neither heats nor cools (parameter AP075)."""
 
@@ -83,7 +80,7 @@ class Appliance(Component):
     silent_mode = enum(address=490, enum_type=SilentMode, signed=False, nan=0xFF, writable=True)
     """The silent mode level of the appliance."""
 
-    _silent_mode_start_time = integer(address=491, signed=False, nan=0xFF, writable=True)
+    _silent_mode_start_time = uint8(address=491, writable=True)
 
     @property
     def silent_mode_start_time(self) -> time | None:
@@ -91,7 +88,7 @@ class Appliance(Component):
 
         return SteppedTimeOfDay.from_steps(self._silent_mode_start_time)
 
-    _silent_mode_end_time = integer(address=492, signed=False, nan=0xFF, writable=True)
+    _silent_mode_end_time = uint8(address=492, writable=True)
 
     @property
     def silent_mode_end_time(self) -> time | None:

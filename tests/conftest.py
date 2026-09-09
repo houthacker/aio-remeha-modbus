@@ -8,6 +8,7 @@ from typing import Any, Final
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+import pytest_asyncio
 from dateutil import tz
 from modbus_connection import ModbusUnit
 from modbus_connection.mock import MockModbusUnit
@@ -75,8 +76,8 @@ def remeha_modbus_unit(request, mock_modbus_unit: MockModbusUnit) -> ModbusUnit:
     return mock_modbus_unit
 
 
-@pytest.fixture
-def remeha_api(
+@pytest_asyncio.fixture
+async def remeha_api(
     request,
     remeha_modbus_unit: MockModbusUnit,
 ) -> RemehaApi:
@@ -88,6 +89,9 @@ def remeha_api(
             f"Trying to create RemehaApi with non-mocked modbus client type {type(remeha_modbus_unit).__qualname__}."
         )
 
+    require_update = (
+        request.param.get("require_update", True) if hasattr(request, "param") else True
+    )
     name = request.param.get("name", "test_api") if hasattr(request, "param") else "test_api"
     time_zone: tzinfo | None = (
         tz.gettz(request.param.get("time_zone", TESTING_TIME_ZONE))
@@ -95,11 +99,15 @@ def remeha_api(
         else tz.gettz(TESTING_TIME_ZONE)
     )
 
-    return RemehaApi(
+    api = RemehaApi(
         name=name,
         unit=remeha_modbus_unit,
         time_zone=time_zone,
     )
+    if require_update:
+        await api.async_update()
+
+    return api
 
 
 @pytest.fixture
