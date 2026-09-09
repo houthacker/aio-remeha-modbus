@@ -614,7 +614,7 @@ def get_current_timeslot(
 
 
 def is_cooling_schedule(
-    schedule: dict[Weekday, ZoneSchedule | None], time_zone: datetime.tzinfo | None
+    schedule: dict[Weekday, ZoneSchedule | None] | None, time_zone: datetime.tzinfo | None
 ) -> bool:
     """Return whether the given schedule is a cooling schedule.
 
@@ -626,6 +626,9 @@ def is_cooling_schedule(
         `True` if the schedule for the current day is a cooling schedule, `False` otherwise.
 
     """
+
+    if schedule is None:
+        return False
 
     now: datetime.datetime = datetime.datetime.now(time_zone)
     day_schedule = schedule.get(Weekday(now.weekday()))

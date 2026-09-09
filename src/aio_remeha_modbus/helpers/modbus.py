@@ -1,48 +1,32 @@
 """Modbus helper functions."""
 
-from collections.abc import Iterable
-from enum import IntFlag
+from typing import TYPE_CHECKING
 
-from modbus_connection.model import NumberField, PackedBitsField, WriteValidator, bits, integer
+from aio_remeha_modbus.api.const import (
+    REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS,
+    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
+    REMEHA_ZONE_RESERVED_REGISTERS,
+)
 
-
-def uint8(
-    address: int,
-    *,
-    stride: int = 0,
-    writable: bool | WriteValidator = False,
-    unit: str | None = None,
-) -> PackedBitsField:
-    """Provide an 8-bit unsigned integer."""
-
-    return bits(address, start=0, width=8, writable=writable, stride=stride, unit=unit)
+if TYPE_CHECKING:
+    from aio_remeha_modbus.api.climate_zone import ClimateZone
+    from aio_remeha_modbus.api.const import ClimateZoneScheduleId
+    from aio_remeha_modbus.api.system_discovery_table import DeviceBoard
 
 
-def uint16(
-    address: int,
-    *,
-    nan: int | Iterable[int] | None = None,
-    stride: int = 0,
-    writable: bool | WriteValidator = False,
-    unit: str | None = None,
-    force_fc16: bool = False,
-) -> NumberField[int]:
-    """Abc."""
-
-    return integer(
-        address,
-        signed=False,
-        nan=nan,
-        stride=stride,
-        writable=writable,
-        unit=unit,
-        force_fc16=force_fc16,
-    )
+def get_zone_register_offset(zone: ClimateZone | int) -> int:
+    """Get the offset in registers for the given `ClimateZone | int`."""
+    zone_id: int = zone if isinstance(zone, int) else zone.id
+    return (zone_id - 1) * REMEHA_ZONE_RESERVED_REGISTERS
 
 
-def bits8[F: (IntFlag)](
-    address: int, flags: type[F] | None = None, writable: bool | WriteValidator = False
-) -> NumberField[F]:
-    """Create an 8-bit bitfield point."""
+def get_device_register_offset(device: DeviceBoard | int) -> int:
+    """Get the offset in registers for the given `DeviceInfo | int`."""
 
-    return NumberField(address, count=1, signed=False, nan=0xFF, convert=flags, writable=writable)
+    device_id: int = device if isinstance(device, int) else device.id
+    return device_id * REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS
+
+
+def get_schedule_register_offset(self, schedule: ClimateZoneScheduleId | int) -> int:
+    """Get the offset in registers for the given `ClimateZoneScheduleId | int."""
+    return schedule * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS

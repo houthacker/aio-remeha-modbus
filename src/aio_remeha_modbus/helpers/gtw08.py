@@ -1,7 +1,7 @@
 """GTW-08 helper functions."""
 
 from datetime import datetime, time, timedelta, tzinfo
-from typing import Final
+from typing import Final, overload
 
 from dateutil import relativedelta
 
@@ -14,6 +14,16 @@ class SteppedTimeOfDay:
     This concerns time encoded using the amount of ten-minute
     steps since midnight.
     """
+
+    @overload
+    @classmethod
+    def from_steps(cls, steps: int, step_minutes: int = REMEHA_TIME_STEP_MINUTES) -> time: ...
+
+    @overload
+    @classmethod
+    def from_steps(
+        cls, steps: int | None, step_minutes: int = REMEHA_TIME_STEP_MINUTES
+    ) -> time | None: ...
 
     @classmethod
     def from_steps(
