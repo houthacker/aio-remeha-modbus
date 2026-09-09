@@ -68,7 +68,7 @@ class Appliance(Component):
     """Which season mode is currently active."""
 
     summer_winter = uint16(address=386, scale=0.01, writable=True, unit="°C")
-    """Upper limit of outdoor temperature for heating."""
+    """Upper limit of outdoor temperature for heating (30.5 means disabled)."""
 
     neutral_band_summer_winter = uint16(address=387, scale=0.01, unit="°C")
     """Temperature band below the summer/winter limit within which the appliance
