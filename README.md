@@ -25,8 +25,7 @@ $ uv pip install dist/*.whl
 ```
 
 ## Exposed API
-The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/en/latest/). A short textual description of the most
-important classes and their hierarchy is shown below.
+The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/en/latest/). A short textual description of the most important classes and their hierarchy is shown below.
 
 #### Caching
 All API calls are executed directly against the modbus proxy; no caching is implemented at this time.
@@ -37,20 +36,21 @@ To facilitate that, the base error class contains a `translation_key` field to l
 and a `translation_placeholders` field. This is a `dict` to be used when extrapolating the error message.
 
 ### Configuration
-To create a new api instance, you first need an instance of `api.config.Configuration`.
-This can either be a `SerialConfiguration`, a `TcpConfiguration` or a `UdpConfiguration`,
-depending on your needs.
+`aio-remeha-modbus` uses [modbus-connection](https://pypi.org/project/modbus-connection/) to talk
+to your appliances, and is agnostic to the way a connection is obtained.
+
+To create a new api instance, you need to obtain a `ModbusUnit` first. See [the modbus-connection docs](https://home-assistant-libs.github.io/modbus-connection/connection/connections-and-units/)
+on how to do that.
 
 ### RemehaApi
-To create a new API instance, call `api.api.RemehaApi.create()` and provide the `Configuration`
-instance created previously.
+To create a new API instance, provide the `ModbusUnit` instance to the `RemehaApi` constructor.
 
 ### Appliance
-The connected Remeha appliance can be retrieved using `RemehaApi.async_read_appliance()`.
+The connected Remeha appliance can be retrieved using `RemehaApi.appliance`.
 
 ### ClimateZone
 Zones, as they are configured in the Remeha appliance are exposed as `ClimateZone` instances
-and can be retrieved using `RemehaApi.async_read_zones()`, providing the corresponding `Appliance`.
+and can be retrieved using `RemehaApi.zones`.
 
 ### Zone schedules
 When a `ClimateZone` is read from the appliance and its `mode` is `ClimateZoneMode.SCHEDULING`,
