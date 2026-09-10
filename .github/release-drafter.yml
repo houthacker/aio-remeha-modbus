@@ -4,10 +4,6 @@ version-template: "$MAJOR.$MINOR.$PATCH$PRERELEASE_IDENTIFIER$PRERELEASE_NUMBER"
 tag-template: "v$MAJOR.$MINOR.$PATCH$PRERELEASE_IDENTIFIER$PRERELEASE_NUMBER"
 exclude-contributors: ["${{ vars.RELEASE_BOT_COMMITTER_NAME }}"]
 
-# pre-release must scan changes since last pre-release,
-# not since last stable release.
-include-pre-releases: true
-
 autolabeler:
   - label: "documentation"
     files:
@@ -27,6 +23,8 @@ autolabeler:
     files:
       - ".github/workflows/*.yaml"
       - ".github/*.yml"
+    branch:
+      - "/chore\/.+/"
 
 categories:
   - title: "Breaking changes"
