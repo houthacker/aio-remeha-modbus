@@ -21,10 +21,13 @@ jobs:
           client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 
-      - uses: release-drafter/release-drafter@v7
+      - name: Run Release Drafter
+        uses: release-drafter/release-drafter@v7
         id: release-drafter
         with:
           config-name: release-drafter.yml
+          prerelease: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') }}
+          prerelase-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && 'beta' || '' }}
           token: ${{ steps.app-token.outputs.token }}
 
       # Update version number in pyproject.toml
