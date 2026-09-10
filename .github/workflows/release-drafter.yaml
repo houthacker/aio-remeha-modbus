@@ -1,7 +1,8 @@
 name: Release Drafter
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main]
 
 # Permissions for default token
@@ -11,7 +12,8 @@ permissions:
 
 jobs:
   update_release_draft:
-    if: ${{ github.actor != vars.RELEASE_BOT_COMMITTER_NAME }} # Prevent endless loops
+    # Prevent endless loops, only run on merged PR, not on declined etc.
+    if: ${{ github.event.pull_request.merged == true && github.actor != vars.RELEASE_BOT_COMMITTER_NAME }}
     runs-on: ubuntu-latest
     steps:
       - name: Create release-bot token
