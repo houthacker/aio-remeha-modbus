@@ -32,7 +32,7 @@ jobs:
         with:
           config-name: release-drafter.yml
           prerelease: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') }}
-          prerelease-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && ${{ env.PRERELEASE_IDENTIFIER }} || '' }}
+          prerelease-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && env.PRERELEASE_IDENTIFIER || '' }}
           token: ${{ steps.app-token.outputs.token }}
 
       # Update version number in pyproject.toml
