@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   update_release_draft:
-    if: github.actor != ${{ vars.RELEASE_BOT_COMMITTER_NAME }} # Prevent endless loops
+    if: ${{ github.actor != vars.RELEASE_BOT_COMMITTER_NAME }} # Prevent endless loops
     runs-on: ubuntu-latest
     steps:
       - name: Create release-bot token
@@ -27,7 +27,7 @@ jobs:
         with:
           config-name: release-drafter.yml
           prerelease: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') }}
-          prerelase-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && 'b' || '' }}
+          prerelease-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && 'b' || '' }}
           token: ${{ steps.app-token.outputs.token }}
 
       # Update version number in pyproject.toml
