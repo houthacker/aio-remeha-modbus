@@ -147,14 +147,47 @@ def nullable_binary(
     )
 
 
+@overload
 def uint8(
     address: int,
     *,
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
-) -> PackedBitsField:
+) -> PackedBitsField: ...
+
+
+@overload
+def uint8(
+    address: int,
+    *,
+    scale: float,
+    stride: int = 0,
+    writable: bool | WriteValidator = False,
+    unit: str | None = None,
+) -> NumberField[int]: ...
+
+
+def uint8(
+    address: int,
+    *,
+    scale: float | None = None,
+    stride: int = 0,
+    writable: bool | WriteValidator = False,
+    unit: str | None = None,
+) -> PackedBitsField | NumberField[int]:
     """Provide an 8-bit unsigned integer."""
+
+    if scale is not None:
+        return gauge(
+            address=address,
+            scale=scale,
+            signed=False,
+            nan=0xFF,
+            stride=stride,
+            writable=writable,
+            unit=unit,
+        )
 
     return bits(address, start=0, width=8, writable=writable, stride=stride, unit=unit)
 

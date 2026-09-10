@@ -50,7 +50,6 @@ class RemehaApi:
         self.discovery_table = SystemDiscoveryTable(unit)
         self.main_control_monitoring = MainControlMonitoring(unit)
         self.appliance = Appliance(unit)
-        # TODO self.sensors = xxx
         self.zones: list[ClimateZone] = []
 
     @staticmethod
