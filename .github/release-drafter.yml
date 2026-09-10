@@ -1,6 +1,11 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 exclude-contributors: ["${{ vars.RELEASE_BOT_COMMITTER_NAME }}"]
+
+# pre-release must scan changes since last pre-release,
+# not since last stable release.
+include-pre-releases: true
+
 autolabeler:
   - label: "documentation"
     files:
