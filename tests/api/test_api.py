@@ -55,56 +55,6 @@ async def test_read_device_instance(remeha_api: RemehaApi):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mock_modbus_client", ["modbus_store.json"], indirect=True)
-@pytest.mark.skip(reason="RemehaApi.sensors is not yet implemented.")
-async def test_read_sensor_values(mock_modbus_client):
-    """Read values for a given list of variables that are configured as sensors."""
-
-    # api: RemehaApi = get_api(mock_modbus_client=mock_modbus_client)
-    # v = await api.async_read_sensor_values(descriptions=SENSOR_REGISTERS)
-    # assert v == dict(
-    #     zip(
-    #         SENSOR_REGISTERS,
-    #         [
-    #             int("0223", 16),
-    #             3,
-    #             24.82,
-    #             20.44,
-    #             20.00,
-    #             21.14,
-    #             22.54,
-    #             1.2,
-    #             12.66,
-    #             None,
-    #             None,
-    #             0.5,
-    #             1234,
-    #             2345,
-    #             321,
-    #             456,
-    #             100,
-    #             200,
-    #             10000,
-    #             5000,
-    #             3000,
-    #             500,
-    #             4000,
-    #             None,
-    #             None,
-    #             2200,
-    #             3500,
-    #             0,
-    #             0,
-    #             0.5,
-    #             57,
-    #             None,
-    #         ],
-    #         strict=True,
-    #     )
-    # )
-
-
-@pytest.mark.asyncio
 async def test_read_zone(remeha_api):
     """Read a single zone."""
 

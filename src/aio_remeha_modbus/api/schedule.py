@@ -437,7 +437,6 @@ class ZoneSchedule:
         #
         # This prevents heating at night when there's no solar power, and also when
         # central heating or cooling should have priority.
-        # TODO make configurable?
         if appliance_seasonal_mode is None:
             _LOGGER.warning(
                 "Your Remeha appliance does not specify a seasonal mode, allowing DHW boiler heating at all hours."
