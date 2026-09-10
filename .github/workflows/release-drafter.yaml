@@ -27,7 +27,7 @@ jobs:
         with:
           config-name: release-drafter.yml
           prerelease: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') }}
-          prerelase-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && 'beta' || '' }}
+          prerelase-identifier: ${{ contains(github.event.pull_request.labels.*.name, 'pre-release') && 'b' || '' }}
           token: ${{ steps.app-token.outputs.token }}
 
       # Update version number in pyproject.toml
