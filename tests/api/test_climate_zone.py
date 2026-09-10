@@ -1,6 +1,10 @@
 """Tests for ClimateZone."""
 
+from datetime import datetime
+from typing import Final
+
 import pytest
+from dateutil import tz
 from freezegun import freeze_time
 
 from aio_remeha_modbus.api import RemehaApi
@@ -328,3 +332,21 @@ async def test_scheduling_temporary_setpoint(remeha_api: RemehaApi):
     # Temporary override for CH zones not yet implemented.
     # That means that changes in the current setpoint are not processed.
     assert zone.current_setpoint == current_setpoint
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_end_change_mode_time(remeha_api: RemehaApi):
+    """Test that the temporary setpoint end time is read correctly."""
+
+    expected: Final[datetime] = datetime(
+        year=2025,
+        month=4,
+        day=28,
+        hour=18,
+        minute=00,
+        second=00,
+        tzinfo=tz.gettz("Europe/Amsterdam"),
+    )
+
+    zone: ClimateZone = remeha_api.zones[0]
+    assert zone.temporary_setpoint_end_time == expected
