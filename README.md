@@ -28,7 +28,9 @@ $ uv pip install dist/*.whl
 The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/en/latest/). A short textual description of the most important classes and their hierarchy is shown below.
 
 #### Caching
-All API calls are executed directly against the modbus proxy; no caching is implemented at this time.
+To retrieve fetch data from modbus, call `await RemehaApi.async_update()` explicitly. After that, the values are retained until the next update call.
+
+The discovery table in `RemehaApi.discovery_table` is read only at the first call to `async_update()`. To re-read the discovery table, restart the process running this API.
 
 #### Error handling
 All errors raised by this library are intended to be translated.
