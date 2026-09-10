@@ -412,7 +412,7 @@ class ClimateZone(Component):
                 return self.room_cooling_setpoint_5
 
         _LOGGER.warning("Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id)
-        return -1
+        return None
 
     def _get_heating_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float:
         raise NotImplementedError
