@@ -1,7 +1,6 @@
 # Force PEP 440 formatting by removing hyphens before the pre-release identifier
-name-template: "v$MAJOR.$MINOR.$PATCH$PRERELEASE_IDENTIFIER$PRERELEASE_NUMBER"
-version-template: "$MAJOR.$MINOR.$PATCH$PRERELEASE_IDENTIFIER$PRERELEASE_NUMBER"
-tag-template: "v$MAJOR.$MINOR.$PATCH$PRERELEASE_IDENTIFIER$PRERELEASE_NUMBER"
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
 exclude-contributors: ["${{ vars.RELEASE_BOT_COMMITTER_NAME }}"]
 
 autolabeler:
