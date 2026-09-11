@@ -58,9 +58,25 @@ async def test_appliance(remeha_modbus_unit: MockModbusUnit):
     assert appliance.actual_produced_power == 57
     assert appliance.cop_calculated == 3.2
     assert appliance.silent_mode == SilentMode.LEVEL_1
-    assert appliance.silent_mode_start_time == time(22, 0)
-    assert appliance.silent_mode_end_time == time(7, 0)
+    assert appliance.silent_mode_start_time == time(hour=22)
+    assert appliance.silent_mode_end_time == time(hour=7)
     assert appliance.ch_enabled
     assert appliance.cooling_type == CoolingType.ACTIVE_COOLING
     assert not appliance.forced_cooling_mode
     assert appliance.hybrid_cop_calculated == 3.5
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["appliance.json"], indirect=True)
+async def test_appliance_write(remeha_modbus_unit: MockModbusUnit):
+    """Test that an Appliance can be written to successfully."""
+
+    appliance = Appliance(remeha_modbus_unit)
+    await appliance.async_update()
+
+    expected = time(hour=23)
+    assert appliance.silent_mode_start_time != expected
+
+    await appliance.set_silent_mode_start_time(expected)
+    await appliance.async_update()
+    assert appliance.silent_mode_start_time == expected
