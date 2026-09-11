@@ -88,7 +88,7 @@ class NullableBinaryField(BinaryField):
 
     @override
     def decode(self, words: list[int], scale_exponent: int | None = None) -> bytes | None:
-        decoded = decode_bytes(words=words, word_order=self.word_order)
+        decoded = super().decode(words=words, scale_exponent=scale_exponent)
 
         if decoded == self._null_bytes:
             return None
@@ -97,10 +97,9 @@ class NullableBinaryField(BinaryField):
 
     @override
     def encode(self, value: bytes | None, scale_exponent: int | None = None) -> list[int]:
-        if value is None:
-            return encode_bytes(self._null_bytes)
-
-        return encode_bytes(value=value, word_order=self.word_order)
+        return super().encode(
+            value=self._null_bytes if value is None else value, scale_exponent=scale_exponent
+        )
 
 
 def binary(
@@ -165,7 +164,7 @@ def uint8(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
-) -> NumberField[int]: ...
+) -> NumberField[float]: ...
 
 
 def uint8(
@@ -175,7 +174,7 @@ def uint8(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
-) -> PackedBitsField | NumberField[int]:
+) -> PackedBitsField | NumberField[float]:
     """Provide an 8-bit unsigned integer."""
 
     if scale is not None:
