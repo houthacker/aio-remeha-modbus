@@ -67,13 +67,28 @@ class NullableBinaryField(BinaryField):
         address: int,
         *,
         count: int = 1,
-        null_byte: int = 0xFF00,
+        nan_bytes: bytes = b"\xff\xff",
         word_order: WordOrder = "big",
         writable: bool | WriteValidator = False,
         stride: int = 0,
         force_fc16: bool = False,
     ) -> None:
-        """Create a new NullableBinaryField."""
+        """Create a new NullableBinaryField.
+
+        Args:
+            address (int): The register address the field starts at.
+            count (int): The amount of registers to read.
+            nan_bytes (bytes): The designated nan-value for a register. Must have a length of 2.
+            word_order (WordOrder): The word-order for multi-register values.
+            writable (bool|WriteValidator): A `bool` or a `WriteValidator`.
+            stride (int): Per-index address-step for a placed component.
+            force_fc16 (bool): Always write with FC16, even a single register.
+
+        Raises:
+            ValueError: If `force_fc16` is `True`, but `writable` is `False`.
+            ValueError: If `nan_bytes` is not exactly 2 bytes long.
+
+        """
 
         super().__init__(
             address,
@@ -84,13 +99,16 @@ class NullableBinaryField(BinaryField):
             force_fc16=force_fc16,
         )
 
-        self._null_bytes = decode_bytes([null_byte] * count)
+        if len(nan_bytes) == 2:
+            self._nan_bytes = nan_bytes * count
+        else:
+            raise ValueError(f"nan_bytes requires a length of 2, got {len(nan_bytes)}")
 
     @override
     def decode(self, words: list[int], scale_exponent: int | None = None) -> bytes | None:
         decoded = super().decode(words=words, scale_exponent=scale_exponent)
 
-        if decoded == self._null_bytes:
+        if decoded == self._nan_bytes:
             return None
 
         return decoded
@@ -98,7 +116,7 @@ class NullableBinaryField(BinaryField):
     @override
     def encode(self, value: bytes | None, scale_exponent: int | None = None) -> list[int]:
         return super().encode(
-            value=self._null_bytes if value is None else value, scale_exponent=scale_exponent
+            value=self._nan_bytes if value is None else value, scale_exponent=scale_exponent
         )
 
 
@@ -127,7 +145,7 @@ def nullable_binary(
     address: int,
     *,
     count: int = 1,
-    null_byte: int = 0xFF00,
+    nan_bytes: bytes = b"\xff\xff",
     word_order: WordOrder = "big",
     writable: bool | WriteValidator = False,
     stride: int = 0,
@@ -138,7 +156,7 @@ def nullable_binary(
     return NullableBinaryField(
         address,
         count=count,
-        null_byte=null_byte,
+        nan_bytes=nan_bytes,
         word_order=word_order,
         writable=writable,
         stride=stride,
