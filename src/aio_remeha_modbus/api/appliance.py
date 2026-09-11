@@ -5,8 +5,7 @@ from enum import IntEnum
 
 from modbus_connection.model import Component, boolean, enum, uint32
 
-from aio_remeha_modbus.helpers.fields import int16, uint8, uint16
-from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
 
 
 class SilentMode(IntEnum):
@@ -414,21 +413,11 @@ class Appliance(Component):
     silent_mode = enum(address=490, enum_type=SilentMode, signed=False, nan=0xFF, writable=True)
     """The silent mode level of the appliance."""
 
-    _silent_mode_start_time = uint8(address=491, writable=True)
+    silent_mode_start_time = time_steps(address=491, writable=True)
+    """The time of day at which the silent mode starts."""
 
-    @property
-    def silent_mode_start_time(self) -> time | None:
-        """The time of day at which the silent mode starts."""
-
-        return SteppedTimeOfDay.from_steps(self._silent_mode_start_time)
-
-    _silent_mode_end_time = uint8(address=492, writable=True)
-
-    @property
-    def silent_mode_end_time(self) -> time | None:
-        """The time of day at which the silent mode ends."""
-
-        return SteppedTimeOfDay.from_steps(self._silent_mode_end_time)
+    silent_mode_end_time = time_steps(address=492, writable=True)
+    """The time of day at which the silent mode ends."""
 
     ch_enabled = boolean(address=500, nan=0xFF, writable=True)
     """Whether central heating demand processing is enabled."""
@@ -493,11 +482,11 @@ class Appliance(Component):
 
     async def set_silent_mode_start_time(self, value: time):
         """Set the time of day at which the silent mode starts."""
-        await self.write("_silent_mode_start_time", SteppedTimeOfDay.to_steps(value))
+        await self.write("silent_mode_start_time", value)
 
     async def set_silent_mode_end_time(self, value: time):
         """Set the time of day at which the silent mode ends."""
-        await self.write("_silent_mode_end_time", SteppedTimeOfDay.to_steps(value))
+        await self.write("silent_mode_end_time", value)
 
     async def set_ch_enabled(self):
         """Enable central heat demand processing."""

@@ -1,5 +1,6 @@
 """Helpers for modbus field types."""
 
+from datetime import time
 from enum import IntFlag
 from typing import overload, override
 
@@ -13,6 +14,8 @@ from modbus_connection.model import (
     gauge,
     integer,
 )
+
+from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 
 
 def decode_bytes(words: list[int], word_order: WordOrder = "big") -> bytes:
@@ -118,6 +121,35 @@ class NullableBinaryField(BinaryField):
         return super().encode(
             value=self._nan_bytes if value is None else value, scale_exponent=scale_exponent
         )
+
+
+class TimeStepsField(RegisterField[time]):
+    """A time field that is built from bytes.
+
+    The time is encoded as 10-minute time steps starting at midnight.
+    """
+
+    nan = 0xFF
+
+    def __init__(self, address: int, *, writable: bool | WriteValidator = False):
+        """Create a new TimeOfDaySteps instance."""
+
+        super().__init__(address, writable=writable)
+
+    @override
+    def decode(self, words: list[int], scale_exponent: int | None = None) -> time | None:
+        steps = words[0]
+        if (steps & 0xFF) == TimeStepsField.nan:
+            return None
+
+        return SteppedTimeOfDay.from_steps(steps)
+
+    @override
+    def encode(self, value: time | None, scale_exponent: int | None = None) -> list[int]:
+        if value is None:
+            return [TimeStepsField.nan]
+
+        return [SteppedTimeOfDay.to_steps(value)]
 
 
 def binary(
@@ -249,7 +281,7 @@ def int16(
     unit: str | None = None,
     force_fc16: bool = False,
 ) -> NumberField[int | float]:
-    """Return a field containing a signed 16-bits integer.
+    """Create a field containing a signed 16-bits integer.
 
     If `scale` is provided, a `gauge` is returned, otherwise an `integer`.
     """
@@ -330,3 +362,9 @@ def uint16(
         unit=unit,
         force_fc16=force_fc16,
     )
+
+
+def time_steps(address: int, *, writable: bool | WriteValidator = False) -> TimeStepsField:
+    """Create a field that contains the time of day in 10-minute steps since midnight."""
+
+    return TimeStepsField(address, writable=writable)
