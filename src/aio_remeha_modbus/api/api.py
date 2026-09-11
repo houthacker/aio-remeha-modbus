@@ -29,12 +29,6 @@ _LOGGER = logging.getLogger(__name__)
 class RemehaApi:
     """Use instances of this class to interact with the Remeha device through Modbus."""
 
-    # zones = repeating_group(
-    #     integer(address=189, signed=False),
-    #     component_class=ClimateZone,
-    #     stride=REMEHA_ZONE_RESERVED_REGISTERS,
-    # )
-
     def __init__(
         self,
         name: str,
