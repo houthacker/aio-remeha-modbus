@@ -18,16 +18,7 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from aio_remeha_modbus.api.const import (
-    Weekday,
-)
 from aio_remeha_modbus.api.main_control_monitoring import ApplianceErrorPriority, ApplianceStatus
-from aio_remeha_modbus.api.schedule import (
-    Timeslot,
-    TimeslotActivity,
-    TimeslotSetpointType,
-    ZoneSchedule,
-)
 
 # from tests.util.registers import SENSOR_REGISTERS
 
@@ -139,73 +130,14 @@ async def test_read_appliance(remeha_api: RemehaApi):
         | ApplianceStatus.COOLING_ACTIVE
     )
 
-    # assert not status.heat_pump_on
-    # assert not status.electrical_backup_on
-    # assert not status.electrical_backup2_on
-    # assert not status.dhw_electrical_backup_on
-    # assert status.service_required
-    # assert not status.power_down_reset_needed
-    # assert status.water_pressure_low
-    # assert status.appliance_pump_on
-    # assert not status.three_way_valve_open
-    # assert not status.three_way_valve
-    # assert not status.three_way_valve_closed
-    # assert not status.dhw_active
-    # assert not status.ch_active
-    # assert status.cooling_active
-
 
 @pytest.mark.asyncio
-async def test_write_zone_schedule(remeha_api: RemehaApi):
-    """Test that a time program can be written to the modbus device."""
+async def test_read_registers(remeha_api: RemehaApi):
+    """Test that the api can read an arbitrary set of registers."""
 
-    expected_schedule = ZoneSchedule(
-        id=ClimateZoneScheduleId.SCHEDULE_2,
-        zone_id=2,
-        day=Weekday.FRIDAY,
-        time_slots=[
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("00:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("10:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("13:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("18:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("21:00"),
-            ),
-        ],
+    assert await remeha_api.async_read_registers(address=130, count=4, struct_format=">HHHH") == (
+        0x0101,
+        0x0102,
+        0x0201,
+        0x0077,
     )
-
-    # Retrieve schedule from modbus, must be None.
-    current_schedule = remeha_api.zones[1].current_schedule
-    assert current_schedule is not None
-    actual_schedule = current_schedule[Weekday.FRIDAY]
-    assert actual_schedule is not None
-    assert actual_schedule != expected_schedule
-
-    await remeha_api.zones[1].async_set_single_schedule(expected_schedule)
-    await remeha_api.zones[1].async_set_selected_schedule(expected_schedule.id)
-    await remeha_api.async_update()
-
-    # Read it back and check if it was successful.
-    current_schedule = remeha_api.zones[1].current_schedule
-    assert current_schedule is not None
-    actual_schedule = current_schedule[Weekday.FRIDAY]
-
-    assert actual_schedule == expected_schedule

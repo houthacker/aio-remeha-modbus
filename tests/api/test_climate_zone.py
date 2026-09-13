@@ -1,6 +1,6 @@
 """Tests for ClimateZone."""
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Final
 
 import pytest
@@ -15,7 +15,13 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from aio_remeha_modbus.api.const import REMEHA_ZONE_RESERVED_REGISTERS
+from aio_remeha_modbus.api.const import REMEHA_ZONE_RESERVED_REGISTERS, Weekday
+from aio_remeha_modbus.api.schedule import (
+    Timeslot,
+    TimeslotActivity,
+    TimeslotSetpointType,
+    ZoneSchedule,
+)
 from aio_remeha_modbus.api.system_discovery_table import (
     DeviceBoard,
     DeviceBoardCategory,
@@ -350,3 +356,59 @@ async def test_climate_zone_end_change_mode_time(remeha_api: RemehaApi):
 
     zone: ClimateZone = remeha_api.zones[0]
     assert zone.temporary_setpoint_end_time == expected
+
+
+@pytest.mark.asyncio
+async def test_write_zone_schedule(remeha_api: RemehaApi):
+    """Test that a time program can be written to the modbus device."""
+
+    expected_schedule = ZoneSchedule(
+        id=ClimateZoneScheduleId.SCHEDULE_2,
+        zone_id=2,
+        day=Weekday.FRIDAY,
+        time_slots=[
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.DHW,
+                switch_time=time.fromisoformat("00:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.COMFORT,
+                activity=TimeslotActivity.DHW,
+                switch_time=time.fromisoformat("10:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.DHW,
+                switch_time=time.fromisoformat("13:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.COMFORT,
+                activity=TimeslotActivity.DHW,
+                switch_time=time.fromisoformat("18:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.DHW,
+                switch_time=time.fromisoformat("21:00"),
+            ),
+        ],
+    )
+
+    # Retrieve schedule from modbus, must be None.
+    current_schedule = remeha_api.zones[1].current_schedule
+    assert current_schedule is not None
+    actual_schedule = current_schedule[Weekday.FRIDAY]
+    assert actual_schedule is not None
+    assert actual_schedule != expected_schedule
+
+    await remeha_api.zones[1].async_set_single_schedule(expected_schedule)
+    await remeha_api.zones[1].async_set_selected_schedule(expected_schedule.id)
+    await remeha_api.async_update()
+
+    # Read it back and check if it was successful.
+    current_schedule = remeha_api.zones[1].current_schedule
+    assert current_schedule is not None
+    actual_schedule = current_schedule[Weekday.FRIDAY]
+
+    assert actual_schedule == expected_schedule

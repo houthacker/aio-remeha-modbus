@@ -1,7 +1,9 @@
 """Implementation of the Remeha Modbus API."""
 
 import logging
+import struct
 from datetime import tzinfo
+from typing import Any
 
 from modbus_connection import ModbusExceptionError, ModbusUnit
 from modbus_connection.model import (
@@ -21,7 +23,7 @@ from aio_remeha_modbus.api.const import (
 from aio_remeha_modbus.api.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
 from aio_remeha_modbus.api.system_discovery_table import SystemDiscoveryTable
-from aio_remeha_modbus.helpers.fields import uint8
+from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,6 +95,28 @@ class RemehaApi:
     def name(self) -> str:
         """Return the modbus hub name."""
         return self._name
+
+    async def async_read_registers(
+        self, address: int, *, count: int = 1, struct_format: str | bytes = "=H"
+    ) -> tuple[Any, ...]:
+        """Read registers from the modbus interface for debugging purposes.
+
+        Args:
+            address (int): The register to start reading at.
+            count (int): The amount of registers to read.
+            struct_format (str | bytes): The struct format to convert the register bytes to.
+
+        Returns:
+            A tuple containing values unpacked according to the format string.
+
+        Raises:
+            ModbusError: if a modbus error occurred while reading the registers.
+            struct.error: if `struct_format` is an illegal struct format.
+
+        """
+
+        registers = await self._unit.read_holding_registers(address, count=count)
+        return struct.unpack(struct_format, decode_bytes(registers))
 
     async def async_update(self):
         """Refresh all components."""
