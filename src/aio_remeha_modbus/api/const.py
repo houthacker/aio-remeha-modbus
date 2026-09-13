@@ -393,7 +393,7 @@ class Limits(float, Enum):
     DHW_MAX_TEMP = 65.0
     """Domestic hot water maximum temperature."""
 
-    DHW_SCHEDULING_SETPOINT_OVERRIDE_DURATION = 2
+    SCHEDULING_SETPOINT_OVERRIDE_DURATION = 2
     """The duration in hours of a temporary setpoint override in DHW scheduling."""
 
     HYSTERESIS_MIN_TEMP = 0.0

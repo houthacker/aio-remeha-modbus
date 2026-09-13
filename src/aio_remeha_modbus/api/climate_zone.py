@@ -6,6 +6,7 @@ from datetime import datetime, tzinfo
 from enum import IntEnum
 from typing import Any, cast, override
 
+from dateutil import relativedelta
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, boolean, enum, string
 
@@ -228,8 +229,8 @@ class ClimateZone(Component):
     owning_device = uint8(address=646)
     """The id of the device owning the zone."""
 
-    mode = enum(address=649, enum_type=ClimateZoneMode, nan=0xFF)
-    """The current mode the zone is in"""
+    mode = enum(address=649, enum_type=ClimateZoneMode, nan=0xFF, writable=True)
+    """The current mode the zone is in."""
 
     room_cooling_setpoint_1 = uint16(address=656, scale=0.1, writable=True, unit="°C")
     """Cooling setpoint in ECO mode"""
@@ -246,7 +247,7 @@ class ClimateZone(Component):
     room_cooling_setpoint_5 = uint16(address=660, scale=0.1, writable=True, unit="°C")
     """Cooling setpoint in EVENING mode"""
 
-    temporary_setpoint = uint16(address=663, scale=0.1, writable=True, unit="°C")
+    temporary_room_setpoint = uint16(address=663, scale=0.1, writable=True, unit="°C")
     """Temporary room setpoint override. Only available when mode is SCHEDULING.
 
     Do not write to this field directly, instead call `await zone.async_set_current_setpoint()`
@@ -272,8 +273,8 @@ class ClimateZone(Component):
     Although this property is optional, it needn't be `None` if `mode != ClimateZoneMode.SCHEDULING`.
     """
 
-    _temporary_setpoint_end_time = nullable_binary(address=978, count=3, writable=True)
-    """End time of temporary setpoint override"""
+    _temporary_room_setpoint_end_time = nullable_binary(address=978, count=3, writable=True)
+    """End time of temporary room setpoint override"""
 
     room_temperature = int16(address=1104, scale=0.1, unit="°C")
     """The current room temperature"""
@@ -389,17 +390,17 @@ class ClimateZone(Component):
         return self._current_schedule
 
     @property
-    def temporary_setpoint_end_time(self) -> datetime | None:
-        """Get the end time of the temporary setpoint override.
+    def temporary_room_setpoint_end_time(self) -> datetime | None:
+        """Get the end time of the temporary room setpoint override.
 
         The returned `datetime` is in the configured time zone of `self.time_zone`.
         """
 
-        if self._temporary_setpoint_end_time is None:
+        if self._temporary_room_setpoint_end_time is None:
             return None
 
         return TimeOfDay.from_bytes(
-            data=self._temporary_setpoint_end_time, time_zone=self.time_zone
+            data=self._temporary_room_setpoint_end_time, time_zone=self.time_zone
         )
 
     def _get_cooling_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float | None:
@@ -422,13 +423,13 @@ class ClimateZone(Component):
         raise NotImplementedError
 
     def _get_current_ch_scheduling_setpoint(self) -> float | None:
-        if self.temporary_setpoint_end_time is not None:
+        if self.temporary_room_setpoint_end_time is not None:
             if (
-                self.temporary_setpoint_end_time is not None
-                and self.temporary_setpoint_end_time >= datetime.now(tz=self.time_zone)
+                self.temporary_room_setpoint_end_time is not None
+                and self.temporary_room_setpoint_end_time >= datetime.now(tz=self.time_zone)
             ):
                 # A setpoint override is currently active.
-                return cast(float, self.temporary_setpoint)
+                return cast(float, self.temporary_room_setpoint)
 
         schedule = self.current_schedule
         current_timeslot: Timeslot | None = get_current_timeslot(
@@ -447,13 +448,13 @@ class ClimateZone(Component):
         return self._get_heating_scheduling_setpoint(current_timeslot.setpoint_type)
 
     def _get_current_dhw_scheduling_setpoint(self) -> float | None:
-        if self.temporary_setpoint_end_time is not None:
+        if self.temporary_room_setpoint_end_time is not None:
             if (
-                self.temporary_setpoint_end_time is not None
-                and self.temporary_setpoint_end_time >= datetime.now(tz=self.time_zone)
+                self.temporary_room_setpoint_end_time is not None
+                and self.temporary_room_setpoint_end_time >= datetime.now(tz=self.time_zone)
             ):
                 # A setpoint override is currently active.
-                return cast(float, self.temporary_setpoint)
+                return cast(float, self.temporary_room_setpoint)
 
         current_timeslot: Timeslot | None = get_current_timeslot(
             schedule=self.current_schedule, time_zone=self.time_zone
@@ -466,6 +467,22 @@ class ClimateZone(Component):
                     return self.dhw_comfort_setpoint
 
         return None
+
+    async def _async_temporary_room_setpoint_override(
+        self, setpoint: float, hours: int = 2
+    ) -> None:
+        """Override the current scheduling setpoint for 2 hours.
+
+        Args:
+            setpoint (float): The temporary setpoint.
+            hours (int): The  override duration in hours
+
+        """
+        await self.write("temporary_room_setpoint", setpoint)
+
+        now: datetime = datetime.now(tz=self.time_zone)
+        override_end_time: datetime = now + relativedelta.relativedelta(hours=hours)
+        await self.write("_temporary_room_setpoint_end_time", TimeOfDay.to_bytes(override_end_time))
 
     @property
     def current_setpoint(self) -> float | None:
@@ -572,14 +589,24 @@ class ClimateZone(Component):
             cast(ClimateZoneType, self.type), cast(ClimateZoneFunction, self.function)
         )
 
-    async def async_set_current_setpoint(self, value: float):
-        """Set the current setpoint of this zone."""
+    async def async_set_mode(self, mode: ClimateZoneMode):
+        """Set the mode of this zone."""
+
+        await self.write("mode", mode)
+
+    async def async_set_current_setpoint(self, setpoint: float):
+        """Set the current setpoint of this zone.
+
+        Args:
+            setpoint (float): The target temperature in °C.
+
+        """
 
         # Check requested setpoint against min/max
-        if value < self.min_temp or value > self.max_temp:
+        if setpoint < self.min_temp or setpoint > self.max_temp:
             _LOGGER.warning(
                 "Ignoring requested setpoint of %0.2f since it is outside allowed range (%0.2f, %0.2f)",
-                value,
+                setpoint,
                 self.min_temp,
                 self.max_temp,
             )
@@ -588,25 +615,27 @@ class ClimateZone(Component):
         if self.is_central_heating():
             match self.mode:
                 case ClimateZoneMode.SCHEDULING:
-                    # Ignore, user must adjust schedule.
-                    # TODO implement temporary setpoint override
-                    _LOGGER.warning(
-                        "Not setting CH climate temporary setpoint, adjust schedule to do this."
+                    await self._async_temporary_room_setpoint_override(
+                        setpoint, hours=cast(int, Limits.SCHEDULING_SETPOINT_OVERRIDE_DURATION)
                     )
                 case ClimateZoneMode.MANUAL:
-                    await self.write("room_setpoint", value)
+                    await self.write("room_setpoint", setpoint)
                 case _:
                     pass
 
         elif self.is_domestic_hot_water():
             match self.mode:
                 case ClimateZoneMode.SCHEDULING:
-                    # The required end time is set by the HA climate entity.
-                    await self.write("temporary_setpoint", value)
+                    # DHW does not support a temporary setpoint override, at least
+                    # through modbus the and Remeha Home app.
+                    # Update schedule instead.
+                    _LOGGER.warning(
+                        "Overriding DHW climate scheduling setpoint not supported; adjust schedule to do this."
+                    )
                 case ClimateZoneMode.MANUAL:
-                    await self.write("dhw_comfort_setpoint", value)
+                    await self.write("dhw_comfort_setpoint", setpoint)
                 case ClimateZoneMode.ANTI_FROST:
-                    await self.write("dhw_reduced_setpoint", value)
+                    await self.write("dhw_reduced_setpoint", setpoint)
         else:
             _LOGGER.warning(
                 "Setting setpoint not supported for climate zones of type %s", self.type

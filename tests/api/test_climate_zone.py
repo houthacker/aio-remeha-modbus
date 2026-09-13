@@ -197,7 +197,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.room_setpoint == 20.5
     assert zone.dhw_comfort_setpoint is None
     assert zone.dhw_reduced_setpoint is None
-    assert zone.temporary_setpoint is None
+    assert zone.temporary_room_setpoint is None
 
     # Reset room setpoint, set mode to manual
     update_raw_data(
@@ -217,35 +217,39 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.dhw_comfort_setpoint == 50
     assert zone.dhw_reduced_setpoint is None
     assert zone.room_setpoint is None
-    assert zone.temporary_setpoint is None
+    assert zone.temporary_room_setpoint is None
 
-    # Validate setpoint for DHW zone in SCHEDULING mode, reset dhw comfort setpoint
+    # Validate setpoint for DHW zone in SCHEDULING mode.
+    # Overriding current setpoint in SCHEDULING mode is not supported (by Remeha)
+    # for DHW zones. So the setpoint must not be updated.
     update_raw_data(
         remeha_api,
         [
             (
                 649 + REMEHA_ZONE_RESERVED_REGISTERS,
                 ClimateZoneMode.SCHEDULING,
-            ),  # dhw comfort setpoint
-            (665 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF),
+            ),
+            # (665 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF),  # dhw comfort setpoint
         ],
     )
     await zone.async_update()
 
-    await zone.async_set_current_setpoint(50)
+    await zone.async_set_current_setpoint(51)
     await zone.async_update()
-    assert zone.current_setpoint is None
-    assert zone.dhw_comfort_setpoint is None
-    assert zone.dhw_reduced_setpoint is None
-    assert zone.room_setpoint is None
-    assert zone.temporary_setpoint == 50
+    assert zone.is_domestic_hot_water()
+    assert zone.current_setpoint != 51
+    assert zone.dhw_comfort_setpoint != 51
+    assert zone.dhw_reduced_setpoint != 51
+    assert zone.room_setpoint != 51
+    assert zone.temporary_room_setpoint != 51
 
     # Validate setpoint for DHW zone in ANTI_FROST mode, reset temporary setpoint.
     update_raw_data(
         remeha_api,
         [
-            (663 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF),  # temporary setpoint
             (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.ANTI_FROST),
+            (663 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF),  # temporary setpoint
+            (665 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF),  # DHW comfort setpoint
         ],
     )
     await zone.async_update()
@@ -256,7 +260,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.dhw_comfort_setpoint is None
     assert zone.dhw_reduced_setpoint == 25
     assert zone.room_setpoint is None
-    assert zone.temporary_setpoint is None
+    assert zone.temporary_room_setpoint is None
 
     # reset dhw reduced setpoint
     update_raw_data(remeha_api, (666 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF))
@@ -318,12 +322,13 @@ async def test_climate_zone_equality(remeha_api):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("remeha_modbus_unit", ["modbus_store_ch_scheduling.json"], indirect=True)
-async def test_scheduling_temporary_setpoint(remeha_api: RemehaApi):
+async def test_dhw_scheduling_temporary_setpoint(remeha_api: RemehaApi):
     """Test that a temporary setpoint can be set if the zone is in scheduling mode."""
 
     # Retrieve a single zone.
     zone: ClimateZone = remeha_api.zones[0]
     assert zone.mode == ClimateZoneMode.SCHEDULING
+    assert zone.is_central_heating()
     assert zone.has_cooling_capability()
     assert zone.selected_schedule == ClimateZoneScheduleId.SCHEDULE_4
 
@@ -335,9 +340,7 @@ async def test_scheduling_temporary_setpoint(remeha_api: RemehaApi):
     await zone.async_set_current_setpoint(temporary_setpoint)
     await remeha_api.async_update()
 
-    # Temporary override for CH zones not yet implemented.
-    # That means that changes in the current setpoint are not processed.
-    assert zone.current_setpoint == current_setpoint
+    assert zone.current_setpoint == temporary_setpoint
 
 
 @pytest.mark.asyncio
@@ -355,7 +358,7 @@ async def test_climate_zone_end_change_mode_time(remeha_api: RemehaApi):
     )
 
     zone: ClimateZone = remeha_api.zones[0]
-    assert zone.temporary_setpoint_end_time == expected
+    assert zone.temporary_room_setpoint_end_time == expected
 
 
 @pytest.mark.asyncio
