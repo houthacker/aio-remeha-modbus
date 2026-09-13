@@ -11,6 +11,9 @@ from pydantic.dataclasses import dataclass
 TK_CONFIG_DICT_MISSING_KEY: Final[str] = "config_dict_missing_key"
 
 # Base register information for zones, device info, time schedules
+REMEHA_MAX_SPAN: Final[int] = 40
+"""Largest single block read is 40 registers"""
+
 REMEHA_ZONE_RESERVED_REGISTERS: Final[int] = 512
 REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS: Final[int] = 6
 REMEHA_TIME_PROGRAM_RESERVED_REGISTERS: Final[int] = 70

@@ -10,6 +10,7 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, boolean, enum, string
 
 from aio_remeha_modbus.api.const import (
+    REMEHA_MAX_SPAN,
     REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
     REMEHA_ZONE_RESERVED_REGISTERS,
     ClimateZoneScheduleId,
@@ -165,6 +166,8 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
 class _DaySchedule(Component):
     """A component representing the raw bytes of a zone schedule for a single day."""
 
+    max_span = REMEHA_MAX_SPAN
+
     id: ClimateZoneScheduleId
 
     zone_id: int
@@ -210,6 +213,7 @@ class ClimateZone(Component):
     However, the entities created from `ClimateZone` instances have distinct types for all supported zone types.
     """
 
+    max_span = REMEHA_MAX_SPAN
     register_ranges = ((640, 646), (648, 980), (1100, 1120))
 
     type = enum(address=640, enum_type=ClimateZoneType, nan=0xFF)

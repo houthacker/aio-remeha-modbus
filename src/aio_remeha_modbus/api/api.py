@@ -18,6 +18,7 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZone,
 )
 from aio_remeha_modbus.api.const import (
+    REMEHA_MAX_SPAN,
     REMEHA_ZONE_RESERVED_REGISTERS,
 )
 from aio_remeha_modbus.api.errors import RemehaApiError, RemehaModbusError
@@ -110,10 +111,14 @@ class RemehaApi:
             A tuple containing values unpacked according to the format string.
 
         Raises:
+            ValueError: if `count` is smaller than 1 or larger than the maximum span defined for the GTW-08.
             ModbusError: if a modbus error occurred while reading the registers.
             struct.error: if `struct_format` is an illegal struct format.
 
         """
+
+        if count < 1 or count > REMEHA_MAX_SPAN:
+            raise ValueError(f"Illegal count {count}: must be between 1 and {REMEHA_MAX_SPAN}.")
 
         registers = await self._unit.read_holding_registers(address, count=count)
         return struct.unpack(struct_format, decode_bytes(registers))

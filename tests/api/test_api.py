@@ -18,6 +18,7 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
+from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN
 from aio_remeha_modbus.api.main_control_monitoring import ApplianceErrorPriority, ApplianceStatus
 
 # from tests.util.registers import SENSOR_REGISTERS
@@ -141,3 +142,14 @@ async def test_read_registers(remeha_api: RemehaApi):
         0x0201,
         0x0077,
     )
+
+
+@pytest.mark.asyncio
+async def test_read_too_many_registers(remeha_api: RemehaApi):
+    """Test that the api doesn't allow reading a register count exceeding REMEHA_MAX_SPAN."""
+
+    count = REMEHA_MAX_SPAN + 1
+    with pytest.raises(
+        ValueError, match=f"Illegal count {count}: must be between 1 and {REMEHA_MAX_SPAN}."
+    ):
+        assert await remeha_api.async_read_registers(address=649, count=count)

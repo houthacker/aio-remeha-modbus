@@ -6,7 +6,7 @@ from functools import cached_property
 from modbus_connection.model import Component, bits, repeating_group, uint32
 from pydantic.dataclasses import dataclass
 
-from aio_remeha_modbus.api.const import REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS
+from aio_remeha_modbus.api.const import REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS, REMEHA_MAX_SPAN
 from aio_remeha_modbus.helpers.fields import uint8, uint16
 
 
@@ -99,6 +99,8 @@ class DeviceBoardCategory:
 class DeviceBoard(Component):
     """A device board on the appliance."""
 
+    max_span = REMEHA_MAX_SPAN
+
     _type = bits(address=129, start=0, width=8)
     _generation = bits(address=129, start=8, width=8)
     _sw_version = uint16(address=130)
@@ -186,6 +188,8 @@ class DeviceBoard(Component):
 
 class SystemDiscoveryTable(Component):
     """The table of discovered device boards."""
+
+    max_span = REMEHA_MAX_SPAN
 
     _reset = uint8(address=200, writable=True)
 

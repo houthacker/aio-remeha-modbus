@@ -5,6 +5,7 @@ from enum import IntEnum
 
 from modbus_connection.model import Component, boolean, enum, uint32
 
+from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
 
 
@@ -306,6 +307,8 @@ class Appliance(Component):
     An `Appliance` stores information about the appliance that cannot be linked to any of
     the other available api types, like appliance error status or burning hours counters.
     """
+
+    max_span = REMEHA_MAX_SPAN
 
     outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""
