@@ -319,7 +319,7 @@ class Appliance(Component):
     summer_winter = uint16(address=386, scale=0.01, writable=True, unit="°C")
     """Upper limit of outdoor temperature for heating (30.5 means disabled)."""
 
-    neutral_band_summer_winter = uint16(address=387, scale=0.01, unit="°C")
+    neutral_band_summer_winter = uint16(address=387, scale=0.01, writable=True, unit="°C")
     """Temperature band below the summer/winter limit within which the appliance
     neither heats nor cools (parameter AP075)."""
 
@@ -454,12 +454,12 @@ class Appliance(Component):
             SeasonalMode.SUMMER,
         ]
 
-    async def set_summer_winter(self, value: float):
+    async def async_set_summer_winter(self, value: float):
         """Set the outdoor temperature upper limit for heating."""
 
         await self.write("summer_winter", value)
 
-    async def set_neutral_band_summer_winter(self, value: float):
+    async def async_set_neutral_band_summer_winter(self, value: float):
         """Set the neutral band in which the heat pump is deactivated.
 
         Args:
@@ -469,36 +469,36 @@ class Appliance(Component):
 
         await self.write("neutral_band_summer_winter", value)
 
-    async def enable_forced_summer_mode(self):
+    async def async_enable_forced_summer_mode(self):
         """Stop heating, maintain hot water. Force summer mode."""
 
         await self.write("forced_summer_mode", True)
 
-    async def disable_forced_summer_mode(self):
+    async def async_disable_forced_summer_mode(self):
         """Do not force summer mode."""
 
         await self.write("forced_summer_mode", False)
 
-    async def set_silent_mode(self, value: SilentMode):
+    async def async_set_silent_mode(self, value: SilentMode):
         """Set the silent mode level."""
         await self.write("silent_mode", value)
 
-    async def set_silent_mode_start_time(self, value: time):
+    async def async_set_silent_mode_start_time(self, value: time):
         """Set the time of day at which the silent mode starts."""
         await self.write("silent_mode_start_time", value)
 
-    async def set_silent_mode_end_time(self, value: time):
+    async def async_set_silent_mode_end_time(self, value: time):
         """Set the time of day at which the silent mode ends."""
         await self.write("silent_mode_end_time", value)
 
-    async def set_ch_enabled(self):
+    async def async_set_ch_enabled(self):
         """Enable central heat demand processing."""
         await self.write("ch_enabled", True)
 
-    async def set_ch_disabled(self):
+    async def async_set_ch_disabled(self):
         """Disable central heat demand processing."""
         await self.write("ch_enabled", False)
 
-    async def set_cooling_type(self, value: CoolingType):
+    async def async_set_cooling_type(self, value: CoolingType):
         """Set the type of cooling for this appliance."""
         await self.write("cooling_type", value)

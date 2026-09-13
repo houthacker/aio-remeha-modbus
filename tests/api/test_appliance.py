@@ -77,6 +77,6 @@ async def test_appliance_write(remeha_modbus_unit: MockModbusUnit):
     expected = time(hour=23)
     assert appliance.silent_mode_start_time != expected
 
-    await appliance.set_silent_mode_start_time(expected)
+    await appliance.async_set_silent_mode_start_time(expected)
     await appliance.async_update()
     assert appliance.silent_mode_start_time == expected
