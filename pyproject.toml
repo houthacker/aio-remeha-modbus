@@ -13,7 +13,7 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.13.4",
-    "modbus-connection",
+    "modbus-connection>=4.12.1",
     "python-dateutil>=2.9.0.post0",
 ]
 license = "LGPL-3.0-or-later"
@@ -36,7 +36,7 @@ build-backend = "uv_build"
 dev = [
     "build>=1.5.0",
     "freezegun>=1.5.5",
-    "modbus-connection[tmodbus]>=4.11.1",
+    "modbus-connection[tmodbus]>=4.12.1",
     "pre-commit>=4.6.0",
     "pyclean>=3.7.0",
     "pytest>=9.1.1",
