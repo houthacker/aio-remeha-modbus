@@ -27,6 +27,14 @@ $ uv pip install dist/*.whl
 ## Exposed API
 The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/en/latest/). A short textual description of the most important classes and their hierarchy is shown below.
 
+## cli tool
+This library also includes a cli tool to query your Remeha appliance. After installing this library, you can use `remeha-query` or if you prefer, you can run it from the cli yourself using `python src/query.py`.
+
+For example, to query the 2nd zone of an appliance that uses an RTU over TCP connection at `192.168.1.2` and port 8899, use the following:
+```bash
+$ remeha-query --transport serial socket://192.168.1.2:8899 --zone 2
+```
+
 #### Caching
 To retrieve fetch data from modbus, call `await RemehaApi.async_update()` explicitly. After that, the values are retained until the next update call.
 
