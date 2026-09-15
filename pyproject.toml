@@ -26,7 +26,7 @@ Funding = "https://buymeacoffee.com/houthacker"
 Documentation = "https://aio-remeha-modbus.readthedocs.io"
 
 [project.scripts]
-aio-remeha-modbus = "aio_remeha_modbus:main"
+remeha-query = "query"
 
 [build-system]
 requires = ["uv_build>=0.11.26,<0.12.0"]

@@ -309,6 +309,7 @@ class Appliance(Component):
     """
 
     max_span = REMEHA_MAX_SPAN
+    register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9230, 9230))
 
     outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""

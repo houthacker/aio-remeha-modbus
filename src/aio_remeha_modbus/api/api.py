@@ -19,7 +19,6 @@ from aio_remeha_modbus.api.climate_zone import (
 )
 from aio_remeha_modbus.api.const import (
     REMEHA_MAX_SPAN,
-    REMEHA_ZONE_RESERVED_REGISTERS,
 )
 from aio_remeha_modbus.api.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
@@ -77,7 +76,6 @@ class RemehaApi:
         for idx in range(self.discovery_table.number_of_zones):
             climate_zone = ClimateZone(
                 self._unit,
-                base_offset=idx * REMEHA_ZONE_RESERVED_REGISTERS,
                 sequence_id=idx + 1,
                 time_zone=self._time_zone,
                 appliance_requires_cooling=self.appliance.is_cooling_required(),

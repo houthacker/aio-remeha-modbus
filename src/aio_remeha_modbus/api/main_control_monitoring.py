@@ -108,6 +108,7 @@ class MainControlMonitoring(Component):
     """A component that contains status- and control fields at appliance level."""
 
     max_span = REMEHA_MAX_SPAN
+    register_ranges = ((256, 259), (272, 280), (288, 304), (340, 342), (350, 350))
 
     demand_status = flags(address=275, flag_type=ApplianceDemandStatus)
     """Status bitfield of the appliance."""

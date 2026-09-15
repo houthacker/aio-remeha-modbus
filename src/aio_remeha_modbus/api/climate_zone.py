@@ -303,22 +303,15 @@ class ClimateZone(Component):
         self,
         unit: ModbusUnit,
         *,
-        base_offset: int = 0,
         sequence_id: int = 1,
         time_zone: tzinfo | None = None,
         appliance_requires_cooling: bool = False,
     ) -> None:
-        """Create a new ClimateZone component.
+        """Create a new ClimateZone component."""
 
-        Raises:
-            AssertionError if `base_offset`is not a multiple of `REMEHA_ZONE_RESERVED_REGISTERS`
-
-        """
-        assert base_offset % REMEHA_ZONE_RESERVED_REGISTERS == 0, (
-            f"ClimateZone base offset must be divisible by {REMEHA_ZONE_RESERVED_REGISTERS}, which {base_offset} is not."
+        super().__init__(
+            unit, index=1, base_offset=(sequence_id - 1) * REMEHA_ZONE_RESERVED_REGISTERS
         )
-
-        super().__init__(unit, 1, base_offset=base_offset)
 
         self.id = sequence_id
         self.time_zone = time_zone

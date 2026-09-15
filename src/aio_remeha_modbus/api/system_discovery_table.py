@@ -190,6 +190,7 @@ class SystemDiscoveryTable(Component):
     """The table of discovered device boards."""
 
     max_span = REMEHA_MAX_SPAN
+    register_ranges = ((128, 198), (200, 200))
 
     _reset = uint8(address=200, writable=True)
 
