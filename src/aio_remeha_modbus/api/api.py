@@ -36,8 +36,25 @@ class RemehaApi:
         name: str,
         unit: ModbusUnit,
         time_zone: tzinfo | None = None,
+        message_spacing_seconds: float = 0.00175,
+        request_timeout_seconds: float = 0.003,
     ):
-        """Create a new API instance."""
+        """Create a new API instance.
+
+        When creating a new `RemehaApi`, the message spacing and timeout are
+        set on `unit`.
+
+        Args:
+            name (str): An arbitrary name of this API.
+            unit (ModbusUnit): The unit to use to query the remote device.
+            time_zone (tzinfo|None): The time zone of the Remeha device.
+            message_spacing_seconds (float): The required message spacing in seconds.
+            request_timeout_seconds (float): The required per-request timeout in seconds.
+
+        """
+
+        unit.set_message_spacing(message_spacing_seconds)
+        unit.require_timeout(request_timeout_seconds)
 
         self._name = name
         self._unit = unit
