@@ -1,32 +1,394 @@
 """Modbus helper functions."""
 
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import ParamSpec, TypeVar, cast
 
-from aio_remeha_modbus.api.const import (
-    REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS,
-    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
-    REMEHA_ZONE_RESERVED_REGISTERS,
-)
-
-if TYPE_CHECKING:
-    from aio_remeha_modbus.api.climate_zone import ClimateZone
-    from aio_remeha_modbus.api.const import ClimateZoneScheduleId
-    from aio_remeha_modbus.api.system_discovery_table import DeviceBoard
+from modbus_connection import ModbusError, ModbusUnit
 
 
-def get_zone_register_offset(zone: ClimateZone | int) -> int:
-    """Get the offset in registers for the given `ClimateZone | int`."""
-    zone_id: int = zone if isinstance(zone, int) else zone.id
-    return (zone_id - 1) * REMEHA_ZONE_RESERVED_REGISTERS
+class _RetryStatistics[E: Exception]:
+    """A observable retry statistics class."""
+
+    def __init__(self) -> None:
+        """Create a new RetryStatistics instance."""
+
+        self._retries: list[E] = []
+
+    def retried(self, exception: E) -> None:
+        """Insert a retry record.
+
+        Args:
+            exception (E): The exception that caused the retry.
+
+        """
+
+        self._retries.append(exception)
+
+    @property
+    def retries(self) -> tuple[E, ...]:
+        """Return a read-only view of the exceptions causing the retries."""
+
+        return tuple(self._retries)
 
 
-def get_device_register_offset(device: DeviceBoard | int) -> int:
-    """Get the offset in registers for the given `DeviceInfo | int`."""
-
-    device_id: int = device if isinstance(device, int) else device.id
-    return device_id * REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS
+R = TypeVar("R")
+P = ParamSpec("P")
+E = TypeVar("E", bound=ModbusError)
 
 
-def get_schedule_register_offset(self, schedule: ClimateZoneScheduleId | int) -> int:
-    """Get the offset in registers for the given `ClimateZoneScheduleId | int."""
-    return schedule * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
+def async_retry(  # noqa: UP047
+    max_attempts: int = 3, exception_type: type[E] = ModbusError
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    """Retry function execution if an exception occurs.
+
+    Args:
+        max_attempts (int): The maximum amount of attempts allowed before raising. Defaults to 3.
+        exception_type (type[E]): Only count attempts if exceptions are (a subclass) of this type. All
+            other exceptions will raise immediately. Defaults to `ModbusError`.
+
+    The function is executed at most `max_attempts`, after which the exception
+    will be re-raised.
+
+    """
+
+    def decorator(coro: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+
+        @wraps(coro)  # noqa: RET503
+        async def wrapped_fn(*args: P.args, **kwargs: P.kwargs) -> R:  # pyright: ignore[reportReturnType]
+            for i in range(1, max_attempts):
+                try:
+                    return await coro(*args, **kwargs)
+                except exception_type as ex:
+                    statistics: _RetryStatistics[E] = cast(_RetryStatistics[E], args[0])
+                    statistics.retried(ex)
+
+                    if i == max_attempts:
+                        raise
+
+        return wrapped_fn
+
+    return decorator
+
+
+class RetryingModbusUnit(ModbusUnit, _RetryStatistics[ModbusError]):
+    """A `ModbusUnit` that retries requests on failure.
+
+    Only methods decorated with `@async_retry()` are retried on failure.
+    This class wraps a provided `ModbusUnit`.
+    """
+
+    def __init__(self, unit: ModbusUnit) -> None:
+        """Create a new RetryingModbusUnit instance.
+
+        Args:
+            unit (ModbusUnit): The unit to wrap.
+
+        """
+
+        _RetryStatistics.__init__(self)
+        self._unit = unit
+
+    @property
+    def connected(self) -> bool:
+        """Show whether this unit is connected to a modbus device."""
+
+        return self._unit.connected
+
+    @async_retry()
+    async def read_holding_registers(self, address: int, count: int) -> list[int]:
+        """Read holding registers (FC03).
+
+        Args:
+            address (int): The register address to read.
+            count (int): The amount of registers to read.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.read_holding_registers(address, count)
+
+    @async_retry()
+    async def read_input_registers(self, address: int, count: int) -> list[int]:
+        """Read input registers (FC04).
+
+        Args:
+            address (int): The register address to read.
+            count (int): The amount of registers to read.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.read_input_registers(address, count)
+
+    async def write_register(self, address: int, value: int) -> None:
+        """Write a single register value.
+
+        Args:
+            address (int): The register to write to.
+            value (int): The raw value to write.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.write_register(address, value)
+
+    async def write_registers(self, address: int, values: list[int]) -> None:
+        """Write to a set of sequential registers.
+
+        Args:
+            address (int): The register to start writing at.
+            values (int): The list of values to write, one per register.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.write_registers(address, values)
+
+    @async_retry()
+    async def read_coils(self, address: int, count: int) -> list[bool]:
+        """Read a sequential set of coil registers.
+
+        Args:
+            address (int): The register to start reading from.
+            count (int): The amount of registers to read.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.read_coils(address, count)
+
+    @async_retry()
+    async def read_discrete_inputs(self, address: int, count: int) -> list[bool]:
+        """Read a sequential set of discrete input registers.
+
+        Args:
+            address (int): The register to start reading from.
+            count (int): The amount of registers to read.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.read_discrete_inputs(address, count)
+
+    async def write_coil(self, address: int, value: bool) -> None:
+        """Write to a single coil register.
+
+        Args:
+            address (int): The register to write to.
+            value (int): The raw value to write.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+        """
+        return await self._unit.write_coil(address, value)
+
+    async def write_coils(self, address: int, values: list[bool]) -> None:
+        """Write to a sequential set of coil registers.
+
+        Args:
+            address (int): The register to write to.
+            values (int): The list of values to write, one per register.
+
+        Raises:
+            ModbusError: If a modbus error occurs.
+
+
+        """
+        return await self._unit.write_coils(address, values)
+
+    async def read_exception_status(self) -> int:
+        """Read the exception status (F0x07) from the modbus device.
+
+        The exception status reads the contents of eight Exception Status
+        outputs in the remote device. Available on serial connections only.
+
+        Returns the exception status.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.read_exception_status()
+
+    async def report_server_id(self) -> bytes:
+        """Read the server id (F0x11).
+
+        Returns the type, current status and other information specific to
+        the remote device. Available on serial connections only.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.report_server_id()
+
+    async def mask_write_register(self, address: int, and_mask: int, or_mask: int) -> None:
+        """Mask write register (F0x16).
+
+        This function code is used to modify the contents of a specified holding
+        register using a combination of an AND mask, an OR mask and the register's
+        current contents.
+
+        The function's algorithm is:
+        ```
+        (current_contents & and_mask) | (or_mask & (~and_mask))
+        ```
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.mask_write_register(address, and_mask, or_mask)
+
+    async def read_write_registers(
+        self, read_address: int, read_count: int, write_address: int, write_values: list[int]
+    ) -> list[int]:
+        """Read/write multiple registers (F0x17).
+
+        Perform a combinarion of one read and one write in a single MODBUS transaction.
+        The write operation is processed before the read.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.read_write_registers(
+            read_address, read_count, write_address, write_values
+        )
+
+    async def read_fifo_queue(self, address: int) -> list[int]:
+        """Read FIFO queue (F0x18).
+
+        Read the contents of a FIFO queue of registers in the remote device.
+
+        Returns `list[int]`:
+            The count of the registers in the queue, followed by the queued data.
+
+        Raises:
+            IllegalDataValueError: if the queue size exceeds 31.
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.read_fifo_queue(address)
+
+    async def read_device_identification(self) -> dict[int, bytes]:
+        """Read device identificatio (F0x2B/F0x0E).
+
+        Read the identification and additional information relative to the physical
+        and functional description of the remote device.
+
+        Returns `dict[int, bytes]`:
+            A `dict` if response values, mapped by their Object Id.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.read_device_identification()
+
+    async def read_file_record(self, file: int, record: int, length: int) -> list[int]:
+        """Read file record (F0x14).
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.read_file_record(file, record, length)
+
+    async def write_file_record(self, file: int, record: int, values: list[int]) -> None:
+        """Write file record (F0x15).
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.write_file_record(file, record, values)
+
+    async def diagnostics(self, sub_function: int, data: int = 0) -> int:
+        """Send a sub-function code with one data word.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.diagnostics(sub_function, data)
+
+    async def get_comm_event_counter(self) -> tuple[bool, int]:
+        """Get comm event counter (F0x0B).
+
+        Get a status word and an event count from the remote device's communication
+        event counter.
+        By fetching the current count before and after a series of messages, a client can
+        determine whether the messages were handled normally by the remote device.
+        The device's event counter is incremented once for each successful message completion.
+        Available on serial connections only.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.get_comm_event_counter()
+
+    async def get_comm_event_log(self) -> bytes:
+        """Get comm event log (F0x0C).
+
+        Get a status word, event count, message count and a field of event bytes
+        from the remote device.
+        Available on serial connections only.
+
+        Raises:
+            IllegalFunctionError: if the remote device does not support this function.
+
+        """
+        return await self._unit.get_comm_event_log()
+
+    def set_message_spacing(self, seconds: float) -> None:
+        """Set the minimum interval between requests to this unit.
+
+        Raises:
+            ValueError: if `seconds` is negative.
+
+        """
+        return self._unit.set_message_spacing(seconds)
+
+    def require_timeout(self, seconds: float | None) -> None:
+        """Ask the link of a per-request timeout of at least `seconds`.
+
+        Raises:
+            ValueError: if `seconds` is negative.
+
+        """
+        return self._unit.require_timeout(seconds)
+
+    def require_connect_delay(self, seconds: float | None) -> None:
+        """Ask the link for a pause of at least `seconds` after it opens.
+
+        Args:
+            seconds (float|None): The pause in seconds, or `None` to withdraw the requirement.
+
+        Raises:
+            ValueError: if `seconds` is negative.
+
+        """
+        return self._unit.require_connect_delay(seconds)
+
+    def on_connection_lost(self, callback: Callable[[], None]) -> Callable[[], None]:
+        """Register a callback when the connection's link drops.
+
+        Returns:
+            A callable to unsubscribe from this event.
+
+        """
+        return self._unit.on_connection_lost(callback)
+
+    async def disconnect(self) -> None:
+        """`async`. Drop the owning connection's link."""
+        return await self._unit.disconnect()
