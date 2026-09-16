@@ -48,12 +48,12 @@ async def main() -> int:  # noqa: D103
     components.add_argument(
         "--zone", type=int, default=0, help="A Climate Zone (one-based index, default=no zone)"
     )
-    api_components = parser.add_argument_group(title="Full API sync")
+    api_components = parser.add_argument_group(title="All components")
     api_components.add_argument(
-        "--apitest",
+        "--all",
         action="store_true",
         default=False,
-        help="Do a one-shot sync using the RemehaApi. No output means no error.",
+        help="Query all components.",
     )
 
     args = parser.parse_args()
@@ -61,7 +61,7 @@ async def main() -> int:  # noqa: D103
     query_main_control_monitoring: bool = args.mcm
     query_appliance: bool = args.appliance or args.zone >= 1
     query_zone: int = args.zone
-    apitest: bool = args.apitest
+    query_all: bool = args.all
 
     try:
         conn = await connect_from_args(args)
@@ -74,10 +74,20 @@ async def main() -> int:  # noqa: D103
     retrying_unit = RetryingModbusUnit(conn.for_unit(args.unit))
     unit = CountingUnit(retrying_unit)
     try:
-        if apitest:
+        if query_all:
             r = RemehaApi(name="cli_api", unit=unit, time_zone=gettz(args.timezone))
             await r.async_update()
-            print("API sync successful")  # noqa: T201
+            print(f"RemehaApi(name={r.name}, time_zone={r._time_zone})")  # noqa: SLF001, T201
+            print("\n")  # noqa: T201
+            print_component(r.discovery_table, title="System Discovery Table")
+            print("\n")  # noqa: T201
+            print_component(r.main_control_monitoring, title="Main Control Monitoring")
+            print("\n")  # noqa: T201
+            print_component(r.appliance, title="Appliance")
+            for zone in r.zones:
+                print("\n")  # noqa: T201
+                print_component(zone, title=f"Climate Zone {zone.id}")
+
         else:
             discovery_table = SystemDiscoveryTable(unit=unit)
             await discovery_table.async_update()

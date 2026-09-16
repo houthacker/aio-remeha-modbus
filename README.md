@@ -30,9 +30,15 @@ The API is documented at [readthedocs](https://aio-remeha-modbus.readthedocs.io/
 ## cli tool
 This library also includes a cli tool to query your Remeha appliance. After installing this library, you can use `remeha-query` or if you prefer, you can run it from the cli yourself using `python src/query.py`.
 
-For example, to query the 2nd zone of an appliance that uses an RTU over TCP connection at `192.168.1.2` and port 8899, use the following:
+### Examples
+Query the 2nd zone of an appliance that uses an RTU over TCP connection at `192.168.1.2` and port 8899:
 ```bash
 $ remeha-query --transport serial socket://192.168.1.2:8899 --zone 2
+```
+
+Query all components
+```bash
+$ remeha-query --transport serial socket://192.168.1.2:8899 --all
 ```
 
 #### Caching
