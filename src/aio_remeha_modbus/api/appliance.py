@@ -314,7 +314,7 @@ class Appliance(Component):
     outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""
 
-    season_mode = enum(address=385, enum_type=SeasonalMode, signed=False)
+    season_mode = enum(address=385, enum_type=SeasonalMode, signed=False, nan=0xFF)
     """Which season mode is currently active."""
 
     summer_winter = uint16(address=386, scale=0.01, writable=True, unit="°C")
