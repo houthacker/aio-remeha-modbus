@@ -17,6 +17,7 @@ from aio_remeha_modbus.api.appliance import Appliance
 from aio_remeha_modbus.api.climate_zone import ClimateZone
 from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
 from aio_remeha_modbus.api.system_discovery_table import SystemDiscoveryTable
+from aio_remeha_modbus.helpers.modbus import RetryingModbusUnit
 
 
 async def main() -> int:  # noqa: D103
@@ -70,33 +71,34 @@ async def main() -> int:  # noqa: D103
 
     print(f"Time zone: {args.timezone}")  # noqa: T201
 
-    counting = CountingUnit(conn.for_unit(args.unit))
+    retrying_unit = RetryingModbusUnit(conn.for_unit(args.unit))
+    unit = CountingUnit(retrying_unit)
     try:
         if apitest:
-            r = RemehaApi(name="cli_api", unit=counting, time_zone=gettz(args.timezone))
+            r = RemehaApi(name="cli_api", unit=unit, time_zone=gettz(args.timezone))
             await r.async_update()
             print("API sync successful")  # noqa: T201
         else:
-            discovery_table = SystemDiscoveryTable(unit=counting)
+            discovery_table = SystemDiscoveryTable(unit=unit)
             await discovery_table.async_update()
             print_component(discovery_table)
 
             if query_main_control_monitoring:
                 print("\n")  # noqa: T201
-                main_control_monitoring = MainControlMonitoring(unit=counting)
+                main_control_monitoring = MainControlMonitoring(unit=unit)
                 await main_control_monitoring.async_update()
                 print_component(main_control_monitoring, title="Main Control Monitoring")
 
             if query_appliance:
                 print("\n")  # noqa: T201
-                appliance = Appliance(unit=counting)
+                appliance = Appliance(unit=unit)
                 await appliance.async_update()
                 print_component(appliance, title="Appliance")
 
             if query_zone >= 1:
                 print("\n")  # noqa: T201
                 zone = ClimateZone(
-                    unit=counting,
+                    unit=unit,
                     sequence_id=query_zone,
                     time_zone=gettz(args.timezone),
                     appliance_requires_cooling=appliance.is_cooling_required(),
@@ -107,7 +109,11 @@ async def main() -> int:  # noqa: D103
     finally:
         await conn.close()
 
-    print(f"\n{counting.reads} Modbus reads")  # noqa: T201
+    print(f"\n{unit.reads} Modbus reads")  # noqa: T201
+    retries = retrying_unit.retries
+    if len(retries) > 0:
+        msg = "\n".join([str(r) for r in retries])
+        print(f"Modbus retries ({len(retries)}):\n{msg}")  # noqa: T201
     return 0
 
 
