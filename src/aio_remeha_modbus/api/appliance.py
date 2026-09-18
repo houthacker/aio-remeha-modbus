@@ -3,9 +3,10 @@
 from datetime import time
 from enum import IntEnum
 
-from modbus_connection.model import Component, boolean, enum, uint32
+from modbus_connection.model import boolean, enum, uint32
 
 from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN
+from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
 
 
@@ -301,7 +302,7 @@ class ApplianceSubStatus(IntEnum):
     """
 
 
-class Appliance(Component):
+class Appliance(RemehaComponent):
     """Represents a Remeha appliance.
 
     An `Appliance` stores information about the appliance that cannot be linked to any of

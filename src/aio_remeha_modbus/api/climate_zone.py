@@ -8,7 +8,7 @@ from typing import Any, cast, override
 
 from dateutil import relativedelta
 from modbus_connection import ModbusUnit
-from modbus_connection.model import Component, boolean, enum, string
+from modbus_connection.model import boolean, enum, string
 
 from aio_remeha_modbus.api.const import (
     REMEHA_MAX_SPAN,
@@ -19,6 +19,7 @@ from aio_remeha_modbus.api.const import (
     Weekday,
 )
 from aio_remeha_modbus.api.errors import RemehaApiError
+from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotSetpointType,
@@ -164,7 +165,7 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
     ] or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
 
 
-class _DaySchedule(Component):
+class _DaySchedule(RemehaComponent):
     """A component representing the raw bytes of a zone schedule for a single day."""
 
     max_span = REMEHA_MAX_SPAN
@@ -205,7 +206,7 @@ class _DaySchedule(Component):
         await self.write("_data", schedule.encode())
 
 
-class ClimateZone(Component):
+class ClimateZone(RemehaComponent):
     """Defines a climate zone following the GTW-08 parameter list.
 
     In the GTW-08 parameter list, a climate zone contains all fields for all zone types.

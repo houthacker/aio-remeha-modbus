@@ -3,10 +3,11 @@
 from enum import IntEnum
 from functools import cached_property
 
-from modbus_connection.model import Component, bits, repeating_group, uint32
+from modbus_connection.model import bits, repeating_group, uint32
 from pydantic.dataclasses import dataclass
 
 from aio_remeha_modbus.api.const import REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS, REMEHA_MAX_SPAN
+from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import uint8, uint16
 
 
@@ -96,7 +97,7 @@ class DeviceBoardCategory:
         return hash(self.type)
 
 
-class DeviceBoard(Component):
+class DeviceBoard(RemehaComponent):
     """A device board on the appliance."""
 
     max_span = REMEHA_MAX_SPAN
@@ -186,7 +187,7 @@ class DeviceBoard(Component):
         return hash(self.board_category)
 
 
-class SystemDiscoveryTable(Component):
+class SystemDiscoveryTable(RemehaComponent):
     """The table of discovered device boards."""
 
     max_span = REMEHA_MAX_SPAN

@@ -2,9 +2,10 @@
 
 from enum import IntEnum, IntFlag, auto
 
-from modbus_connection.model import Component, enum, flags
+from modbus_connection.model import enum, flags
 
 from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN
+from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import uint16
 
 
@@ -104,7 +105,7 @@ class ApplianceStatus(IntFlag):
     """Whether the cooling system is active."""
 
 
-class MainControlMonitoring(Component):
+class MainControlMonitoring(RemehaComponent):
     """A component that contains status- and control fields at appliance level."""
 
     max_span = REMEHA_MAX_SPAN
