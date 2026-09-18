@@ -3,11 +3,45 @@
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from modbus_connection.exceptions import (
+    GatewayPathUnavailableError,
+    GatewayTargetError,
+    IllegalDataAddressError,
+    IllegalDataValueError,
+    MemoryParityError,
+    ModbusConnectionError,
+    ModbusDesyncError,
+    ModbusTimeoutError,
+    ServerDeviceBusyError,
+    ServerDeviceFailureError,
+)
+
 if TYPE_CHECKING:
     from aio_remeha_modbus.api.climate_zone import ClimateZoneScheduleId
 
 type Placeholders = dict[str, str | int | bool | Enum | Placeholders]
 """Type declaration for placeholders in a translateable error."""
+
+type TransientModbusError = (
+    GatewayPathUnavailableError
+    | GatewayTargetError
+    | IllegalDataAddressError
+    | IllegalDataValueError
+    | MemoryParityError
+    | ModbusConnectionError
+    | ModbusDesyncError
+    | ModbusTimeoutError
+    | ServerDeviceBusyError
+    | ServerDeviceFailureError
+)
+"""Transient `ModbusError` subclasses.
+
+These exceptions are candidates for the `async_retry` decorator.
+Not all of them seem obvious, but especially `GatewayPathUnavailableError`,
+`IllegalDataAddressError` and `IllegalDataValueError` have been observed
+in the wild whenever either the GTW-08 itself or the backing L-bus are
+overloaded or busy.
+"""
 
 
 class RemehaApiError(Exception):

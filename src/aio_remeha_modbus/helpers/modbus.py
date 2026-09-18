@@ -4,18 +4,21 @@ from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import ParamSpec, TypeVar, cast
 
-from modbus_connection import ModbusError, ModbusUnit
+from modbus_connection import ModbusUnit
+from typing_extensions import TypeForm
+
+from aio_remeha_modbus.api.errors import TransientModbusError
 
 
-class _RetryStatistics[E: Exception]:
+class _RetryStatistics:
     """A observable retry statistics class."""
 
     def __init__(self) -> None:
         """Create a new RetryStatistics instance."""
 
-        self._retries: list[E] = []
+        self._retries: list[TypeForm[TransientModbusError]] = []
 
-    def retried(self, exception: E) -> None:
+    def retried(self, exception: TypeForm[TransientModbusError]) -> None:
         """Insert a retry record.
 
         Args:
@@ -26,7 +29,7 @@ class _RetryStatistics[E: Exception]:
         self._retries.append(exception)
 
     @property
-    def retries(self) -> tuple[E, ...]:
+    def retries(self) -> tuple[TypeForm[TransientModbusError], ...]:
         """Return a read-only view of the exceptions causing the retries."""
 
         return tuple(self._retries)
@@ -34,21 +37,17 @@ class _RetryStatistics[E: Exception]:
 
 R = TypeVar("R")
 P = ParamSpec("P")
-E = TypeVar("E", bound=ModbusError)
 
 
-def async_retry(  # noqa: UP047
-    max_attempts: int = 3, exception_type: type[E] = ModbusError
+def retry_on_transient(
+    max_tries: int = 3,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
-    """Retry function execution if an exception occurs.
+    """Retry function execution if a `TransientModbusError` occurs.
 
     Args:
-        max_attempts (int): The maximum amount of attempts allowed before raising. Defaults to 3.
-        exception_type (type[E]): Only count attempts if exceptions are (a subclass) of this type. All
-            other exceptions will raise immediately. Defaults to `ModbusError`.
+        max_tries (int): The maximum amount attempts to execute the function before giving up and raising.
 
-    The function is executed at most `max_attempts`, after which the exception
-    will be re-raised.
+    The function is executed at most `max_tries`, after which the exception will be re-raised.
 
     """
 
@@ -56,14 +55,18 @@ def async_retry(  # noqa: UP047
 
         @wraps(coro)  # noqa: RET503
         async def wrapped_fn(*args: P.args, **kwargs: P.kwargs) -> R:  # pyright: ignore[reportReturnType]
-            for i in range(1, max_attempts):
+            for i in range(max_tries):
                 try:
                     return await coro(*args, **kwargs)
-                except exception_type as ex:
-                    statistics: _RetryStatistics[E] = cast(_RetryStatistics[E], args[0])
-                    statistics.retried(ex)
+                except Exception as ex:
+                    if isinstance(ex, TransientModbusError.__value__):
+                        if args and isinstance(args[0], _RetryStatistics):
+                            statistics: _RetryStatistics = cast(_RetryStatistics, args[0])
+                            statistics.retried(cast(TypeForm[TransientModbusError], ex))
 
-                    if i == max_attempts:
+                        if i == max_tries - 1:
+                            raise
+                    else:
                         raise
 
         return wrapped_fn
@@ -71,7 +74,7 @@ def async_retry(  # noqa: UP047
     return decorator
 
 
-class RetryingModbusUnit(ModbusUnit, _RetryStatistics[ModbusError]):
+class RetryingModbusUnit(ModbusUnit, _RetryStatistics):
     """A `ModbusUnit` that retries requests on failure.
 
     Only methods decorated with `@async_retry()` are retried on failure.
@@ -95,7 +98,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics[ModbusError]):
 
         return self._unit.connected
 
-    @async_retry()
+    @retry_on_transient()
     async def read_holding_registers(self, address: int, count: int) -> list[int]:
         """Read holding registers (FC03).
 
@@ -109,7 +112,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics[ModbusError]):
         """
         return await self._unit.read_holding_registers(address, count)
 
-    @async_retry()
+    @retry_on_transient()
     async def read_input_registers(self, address: int, count: int) -> list[int]:
         """Read input registers (FC04).
 
@@ -149,7 +152,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics[ModbusError]):
         """
         return await self._unit.write_registers(address, values)
 
-    @async_retry()
+    @retry_on_transient()
     async def read_coils(self, address: int, count: int) -> list[bool]:
         """Read a sequential set of coil registers.
 
@@ -163,7 +166,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics[ModbusError]):
         """
         return await self._unit.read_coils(address, count)
 
-    @async_retry()
+    @retry_on_transient()
     async def read_discrete_inputs(self, address: int, count: int) -> list[bool]:
         """Read a sequential set of discrete input registers.
 
