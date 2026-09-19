@@ -16,6 +16,7 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneType,
 )
 from aio_remeha_modbus.api.const import REMEHA_ZONE_RESERVED_REGISTERS, Weekday
+from aio_remeha_modbus.api.errors import InvalidZoneSchedule
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
@@ -85,6 +86,27 @@ def test_supported_climate_zone_functions():
 
     assert ClimateZoneFunction.MIXING_CIRCUIT.is_supported()
     assert ClimateZoneFunction.DHW_PRIMARY.is_supported()
+
+
+@pytest.mark.asyncio
+async def test_invalid_zone_schedule(remeha_api: RemehaApi):
+    """Test that an invalid zone schedule read from modbus causes an InvalidZoneSchedule."""
+
+    zone: ClimateZone | None = remeha_api.zones[1]
+    assert zone is not None
+    assert zone.is_domestic_hot_water()
+
+    # Store invalid values for the first zone schedule.
+    # The first time slot is stored in byte 1-3 (inclusive, 0-based), so scramble that.
+    update_raw_data(
+        remeha_api,
+        [
+            (690 + REMEHA_ZONE_RESERVED_REGISTERS, 0x1515),  # garbage
+        ],
+    )
+
+    with pytest.raises(InvalidZoneSchedule):
+        await remeha_api.async_update()
 
 
 @pytest.mark.asyncio

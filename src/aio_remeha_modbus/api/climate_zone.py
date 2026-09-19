@@ -18,7 +18,7 @@ from aio_remeha_modbus.api.const import (
     Limits,
     Weekday,
 )
-from aio_remeha_modbus.api.errors import RemehaApiError
+from aio_remeha_modbus.api.errors import InvalidZoneSchedule, RemehaApiError
 from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
@@ -364,7 +364,15 @@ class ClimateZone(RemehaComponent):
     @override
     async def async_update(self, *, notify: bool = True) -> None:
         await super().async_update(notify=False)
-        await self._async_update_schedule()
+
+        try:
+            await self._async_update_schedule()
+        except ValueError as e:
+            raise InvalidZoneSchedule(
+                zone=self.id,
+                schedule_id=cast(ClimateZoneScheduleId, self.selected_schedule),
+                is_dhw=self.is_domestic_hot_water(),
+            ) from e
 
         if notify:
             self.notify()
