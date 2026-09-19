@@ -16,6 +16,9 @@ from aio_remeha_modbus.api.appliance import (
 )
 from aio_remeha_modbus.api.climate_zone import (
     ClimateZone,
+    ZoneSchedule,
+    _DaySchedule,
+    _get_day_schedule_offset,
 )
 from aio_remeha_modbus.api.const import (
     REMEHA_MAX_SPAN,
@@ -137,6 +140,16 @@ class RemehaApi:
 
         registers = await self._unit.read_holding_registers(address, count=count)
         return struct.unpack(struct_format, decode_bytes(registers))
+
+    async def async_overwrite_zone_schedule(self, schedule: ZoneSchedule) -> None:
+        """Overwrite an existing `ZoneSchedule` with the given one."""
+
+        component = _DaySchedule(
+            unit=self._unit,
+            index=schedule.day + 1,
+            base_offset=_get_day_schedule_offset(zone_id=schedule.zone_id, schedule_id=schedule.id),
+        )
+        await component.async_set_schedule(schedule)
 
     async def async_update(self):
         """Refresh all components."""
