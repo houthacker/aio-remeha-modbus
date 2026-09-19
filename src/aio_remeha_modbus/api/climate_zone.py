@@ -106,7 +106,7 @@ def _writable_schedule_id() -> Callable[[Any], Any]:
     return _validate
 
 
-def _map_selected_schedule(
+def _map_selected_schedule_for_read(
     zone_mode: ClimateZoneMode,
     zone_function: ClimateZoneFunction,
     appliance_requires_cooling: bool,
@@ -114,9 +114,9 @@ def _map_selected_schedule(
 ) -> ClimateZoneScheduleId | None:
     """Map `selected_schedule` to the correct `ClimateZoneScheduleId` for reading.
 
-    Remeha uses `SCHEDULE_4` for cooling schedules but writing that to modbus
-    causes an exception. Instead, Remeha uses `SCHEDULE_1` in this case and
-    the cooling schedule usage must be derived from the appliance/zone state.
+    Remeha stores the cooling schedule in schedule 4, but writing that to
+    `selected_schedule` raises an exception since it only allows the values
+    of schedule 1 through 3.
     """
     return (
         ClimateZoneScheduleId.SCHEDULE_4
@@ -124,6 +124,22 @@ def _map_selected_schedule(
         and zone_function.has_cooling_capability()
         and appliance_requires_cooling
         else (ClimateZoneScheduleId(selected_schedule) if selected_schedule is not None else None)
+    )
+
+
+def _map_selected_schedule_for_write(
+    selected_schedule: ClimateZoneScheduleId,
+) -> ClimateZoneScheduleId:
+    """Map `selected_schedule` to the correct `ClimateZoneScheduleId` for writing.
+
+    Remeha stores the cooling schedule in schedule 4, but writing that to
+    `selected_schedule` raises an exception since it only allows the values
+    of schedule 1 through 3.
+    """
+    return (
+        ClimateZoneScheduleId.SCHEDULE_1
+        if selected_schedule is ClimateZoneScheduleId.SCHEDULE_4
+        else selected_schedule
     )
 
 
@@ -357,12 +373,16 @@ class ClimateZone(RemehaComponent):
     def selected_schedule(self) -> ClimateZoneScheduleId | None:
         """Return the mapped selected schedule.
 
-        Remeha uses schedule 4 for cooling, but doesn't expose it as selected.
-        instead, schedule 1 is selected. `RemehaApi` maps this to schedule 4.
+        Remeha stores the cooling schedule in schedule 4, but writing that to
+        `selected_schedule` raises an exception since it only allows the values
+        of schedule 1 through 3.
+
+        The API transparently maps this so that users can r/w the selected
+        schedule intuitively.
         """
 
         return (
-            _map_selected_schedule(
+            _map_selected_schedule_for_read(
                 zone_mode=self.mode,
                 zone_function=self.function,
                 appliance_requires_cooling=self.appliance_requires_cooling,
@@ -673,27 +693,28 @@ class ClimateZone(RemehaComponent):
     async def async_set_selected_schedule(self, value: ClimateZoneScheduleId):
         """Write the selected schedule.
 
-        Only schedules 1-3 can be written. Schedule 4 is a virtual schedule used for cooling.
+        Only schedules 1-3 can be written. If schedule 4 is provided,
+        it is transparently mapped to schedule 1 before writing.
 
         Args:
             value (ClimateZoneScheduleId): The schedule to select.
 
-        Raises:
-            TypeError if value is`ClimateZoneScheduleId.SCHEDULE_4`
-
         """
 
-        await self.write("_selected_schedule", value)
+        await self.write(
+            "_selected_schedule",
+            _map_selected_schedule_for_write(
+                selected_schedule=value,
+            ),
+        )
 
     async def async_set_single_schedule(self, schedule: ZoneSchedule):
         """Write a single schedule.
 
-        The schedule written to is `schedule.id`. If that schedule is `ClimateZoneScheduleId.SCHEDULE_4`,
-        the schedule not written there but mapped to `ClimateZoneScheduleId.SCHEDULE_1` instead.
+        The schedule written to is `schedule.id`.
 
         **Note**
-        The given `schedule` may reside under a different schedule than the currently selected one,
-        although it must belong to this zone.
+        Writing a single schedule does _not_ select it as the current schedule.
 
         Raises:
             RemehaApiError(`translation_key="zone_ownership_error"`): If the schedule does nog belong
@@ -704,36 +725,44 @@ class ClimateZone(RemehaComponent):
         if schedule.zone_id != self.id:
             raise RemehaApiError("zone_ownership_error")
 
-        schedule_id = (
-            schedule.id
-            if schedule.id != ClimateZoneScheduleId.SCHEDULE_4
-            else ClimateZoneScheduleId.SCHEDULE_1
-        )
-
         _day_schedule = _DaySchedule(
             unit=self.modbus_unit,
             index=schedule.day + 1,
-            base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=schedule_id),
-            id=schedule_id,
+            base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=schedule.id),
+            id=schedule.id,
             zone_id=self.id,
         )
 
         await _day_schedule.async_set_schedule(schedule)
 
-    async def async_set_current_schedule(self, schedule: dict[Weekday, ZoneSchedule | None]):
+    async def async_set_current_schedule(self, schedule: dict[Weekday, ZoneSchedule]):
         """Write a full schedule.
+
+        Setting the current schedule also updates `selected_schedule` to `schedule.id`.
 
         Raises:
             RemehaApiError(`translation_key="zone_ownership_error"`): If any schedule does nog belong
             to this zone.
 
+            RemehaApiError(`translation_key="invalid_schedule"`): If `schedule` doesn't contain all `Weekday`s
+            or if all `ZoneSchedule`s don't share the same `ClimateZoneScheduleId`.
+
         """
 
+        # All week days must be assigned a schedule.
+        if len([schedule]) != len(Weekday):
+            raise RemehaApiError("invalid_schedule")
+
+        # All schedules must belong to this zone.
         if any(s.zone_id != self.id for s in schedule.values() if s is not None):
             raise RemehaApiError("zone_ownership_error")
 
+        # Finally, all schedules must share the same `id`.
+        if len({s.id for s in schedule.values()}) > 1:
+            raise RemehaApiError("invalid_schedule")
+
         # Sequentially write all schedules.
-        for s in [x for x in schedule.values() if x is not None]:
+        for s in schedule.values():
             _day_schedule = _DaySchedule(
                 unit=self.modbus_unit,
                 index=s.day + 1,
@@ -744,9 +773,9 @@ class ClimateZone(RemehaComponent):
 
             await _day_schedule.async_set_schedule(s)
 
-        # If all day schedules have the selected schedule as their id, set self.current_schedule.
-        if all(s.id == self.selected_schedule for s in schedule.values() if s is not None):
-            self._current_schedule = dict(schedule.items())
+        # Select the current schedule.
+        await self.async_set_selected_schedule(schedule[Weekday.MONDAY].id)
+        self._current_schedule = dict(schedule.items())
 
     def __eq__(self, other) -> bool:
         """Compare this `ClimateZone` with another for equality.

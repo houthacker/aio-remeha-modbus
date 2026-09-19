@@ -292,6 +292,24 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
 
 
 @pytest.mark.asyncio
+async def test_climate_zone_set_selected_schedule(remeha_api):
+    """Test that the CH schedule is always mapped to schedule_1 from schedule_4."""
+
+    zone: ClimateZone | None = remeha_api.zones[0]
+    assert zone is not None
+    assert zone.is_central_heating()
+
+    await zone.async_set_mode(ClimateZoneMode.SCHEDULING)
+    await zone.async_set_selected_schedule(ClimateZoneScheduleId.SCHEDULE_4)
+
+    # The backing field must contain schedule_1
+    assert zone._selected_schedule is ClimateZoneScheduleId.SCHEDULE_1  # noqa: SLF001
+
+    # From the API's perspective, the selected schedule is still required to be schedule_4
+    assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_4
+
+
+@pytest.mark.asyncio
 async def test_climate_zone_get_current_temperature(remeha_api):
     """Test the retrieval of the current temperature of a climate zone."""
 
@@ -415,3 +433,57 @@ async def test_write_zone_schedule(remeha_api: RemehaApi):
     actual_schedule = current_schedule[Weekday.FRIDAY]
 
     assert actual_schedule == expected_schedule
+
+
+@pytest.mark.asyncio
+async def test_write_cooling_schedule(remeha_api: RemehaApi):
+    """Test that a cooling schedule can be written to the modbus device."""
+
+    expected_schedule = ZoneSchedule(
+        id=ClimateZoneScheduleId.SCHEDULE_4,
+        zone_id=1,
+        day=Weekday.FRIDAY,
+        time_slots=[
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.HEAT_COOL,
+                switch_time=time.fromisoformat("00:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.COMFORT,
+                activity=TimeslotActivity.HEAT_COOL,
+                switch_time=time.fromisoformat("10:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.HEAT_COOL,
+                switch_time=time.fromisoformat("13:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.COMFORT,
+                activity=TimeslotActivity.HEAT_COOL,
+                switch_time=time.fromisoformat("18:00"),
+            ),
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.HEAT_COOL,
+                switch_time=time.fromisoformat("21:00"),
+            ),
+        ],
+    )
+
+    await remeha_api.zones[0].async_set_mode(ClimateZoneMode.SCHEDULING)
+    await remeha_api.zones[0].async_set_selected_schedule(expected_schedule.id)
+    await remeha_api.zones[0].async_set_single_schedule(expected_schedule)
+
+    # TODO validate that the state is equal before and after the write.
+    await remeha_api.async_update()
+
+    # Read it back and check if it was successful.
+    current_schedule = remeha_api.zones[0].current_schedule
+    assert current_schedule is not None
+    actual_schedule = current_schedule[Weekday.FRIDAY]
+
+    assert actual_schedule == expected_schedule
+    assert remeha_api.zones[0].mode is ClimateZoneMode.SCHEDULING
+    assert remeha_api.zones[0].selected_schedule is expected_schedule.id
