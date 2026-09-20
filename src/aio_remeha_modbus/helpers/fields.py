@@ -1,7 +1,7 @@
 """Helpers for modbus field types."""
 
 from datetime import time
-from enum import IntFlag
+from enum import IntEnum, IntFlag
 from typing import overload, override
 
 from modbus_connection import WordOrder
@@ -31,6 +31,16 @@ def encode_bytes(value: bytes, word_order: WordOrder = "big") -> list[int]:
         int.from_bytes(bytes=value[i : i + 2], byteorder=word_order)
         for i in range(0, len(value), 2)
     ]
+
+
+class BytePosition(IntEnum):
+    """Describes the position of a byte within a 2-byte modbus register."""
+
+    LOW = 0
+    """The low byte within a single modbus register."""
+
+    HIGH = 8
+    """The high byte within a single modbus register."""
 
 
 class BinaryField(RegisterField[bytes]):
@@ -203,6 +213,7 @@ def uint8(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
+    position: BytePosition = BytePosition.LOW,
 ) -> PackedBitsField: ...
 
 
@@ -224,8 +235,13 @@ def uint8(
     stride: int = 0,
     writable: bool | WriteValidator = False,
     unit: str | None = None,
+    position: BytePosition | None = BytePosition.LOW,
 ) -> PackedBitsField | NumberField[float]:
-    """Provide an 8-bit unsigned integer."""
+    """Provide an 8-bit unsigned integer.
+
+    For a non-scaled value, `position` determines which register byte to read.
+    This is useful for reading registers that contain two distinct values.
+    """
 
     if scale is not None:
         return gauge(
@@ -238,7 +254,8 @@ def uint8(
             unit=unit,
         )
 
-    return bits(address, start=0, width=8, writable=writable, stride=stride, unit=unit)
+    assert position is not None
+    return bits(address, start=position, width=8, writable=writable, stride=stride, unit=unit)
 
 
 def bits8[F: IntFlag](
@@ -339,7 +356,7 @@ def uint16(
     unit: str | None = None,
     force_fc16: bool = False,
 ) -> NumberField[int | float]:
-    """Abc."""
+    """Provide an unsigned 16-bit integer field."""
 
     if scale is None:
         return integer(
