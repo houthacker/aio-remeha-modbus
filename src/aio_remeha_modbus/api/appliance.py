@@ -448,7 +448,7 @@ class Appliance(RemehaComponent):
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.
 
-        This can be forced (`cooling_forced == True`) or derived (`season_mode` is in a summer variant).
+        This can be forced (`forced_cooling_mode == True`) or derived (`season_mode` is in a summer variant).
         """
 
         return self.forced_cooling_mode or self.season_mode in [

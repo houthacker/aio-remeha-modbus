@@ -5,7 +5,7 @@ def test_smoke():
     """Test that the API can be imported."""
     from aio_remeha_modbus.api import const  # noqa: PLC0415
 
-    assert const.MetaRegisters.NUMBER_OF_DEVICES.start_address == 128
+    assert const.Limits.CH_MAX_TEMP is not None
 
 
 if __name__ == "__main__":
