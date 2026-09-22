@@ -44,7 +44,7 @@ $ remeha-query --transport serial socket://192.168.1.2:8899 --all
 #### Caching
 To retrieve fetch data from modbus, call `await RemehaApi.async_update()` explicitly. After that, the values are retained until the next update call.
 
-The discovery table in `RemehaApi.discovery_table` is read only at the first call to `async_update()`. To re-read the discovery table, restart the process running this API.
+The discovery table in `RemehaApi.discovery_table` is only read at the first call to `async_update()`. To re-read the discovery table, restart the process running this API.
 
 #### Error handling
 All errors raised by this library are intended to be translated.
