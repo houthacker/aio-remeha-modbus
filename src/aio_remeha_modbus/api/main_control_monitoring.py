@@ -56,8 +56,8 @@ class ApplianceErrorPriority(IntEnum):
     """Normal state, no current error."""
 
 
-class ApplianceStatus(IntFlag):
-    """The appliance status shows various boolean status fields about the appliance."""
+class MonitoringStatus(IntFlag):
+    """The appliance monitoring status shows various boolean status fields about the appliance."""
 
     FLAME_ON = 2**16
     """Whether the appliance flame is on."""
@@ -124,7 +124,7 @@ class MainControlMonitoring(RemehaComponent):
     error_priority = enum(address=278, enum_type=ApplianceErrorPriority)
     """The current appliance error priority."""
 
-    status = flags(address=279, flag_type=ApplianceStatus, count=2)
+    status = flags(address=279, flag_type=MonitoringStatus, count=2)
     """Various appliance-level status fields."""
 
     def error_as_str(self) -> str:

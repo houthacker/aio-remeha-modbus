@@ -19,7 +19,7 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneType,
 )
 from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN, Weekday
-from aio_remeha_modbus.api.main_control_monitoring import ApplianceErrorPriority, ApplianceStatus
+from aio_remeha_modbus.api.main_control_monitoring import ApplianceErrorPriority, MonitoringStatus
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
@@ -128,14 +128,14 @@ async def test_read_appliance(remeha_api: RemehaApi):
     assert appliance.silent_mode_end_time == time(hour=7)
 
     assert ctrl_monitoring.status is not None
-    status: ApplianceStatus = ctrl_monitoring.status
+    status: MonitoringStatus = ctrl_monitoring.status
 
     assert (
         status
-        == ApplianceStatus.SERVICE_REQUIRED
-        | ApplianceStatus.WATER_PRESSURE_LOW
-        | ApplianceStatus.APPLIANCE_PUMP_ON
-        | ApplianceStatus.COOLING_ACTIVE
+        == MonitoringStatus.SERVICE_REQUIRED
+        | MonitoringStatus.WATER_PRESSURE_LOW
+        | MonitoringStatus.APPLIANCE_PUMP_ON
+        | MonitoringStatus.COOLING_ACTIVE
     )
 
 
