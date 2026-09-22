@@ -346,10 +346,10 @@ class Appliance(RemehaComponent):
     flow_rate = uint16(address=410, scale=0.01, unit="L/min")
     """The current flow rate in L/min."""
 
-    status = enum(address=411, enum_type=ApplianceStatus, nan=0xFF)
+    appliance_status = enum(address=411, enum_type=ApplianceStatus, nan=0xFF)
     """The current appliance status (parameter AM012)."""
 
-    substatus = enum(address=412, enum_type=ApplianceSubStatus)
+    appliance_substatus = enum(address=412, enum_type=ApplianceSubStatus)
     """The current appliance substatus. Shows details about the current status (parameter AM014)."""
 
     actual_relative_power = uint16(address=413, scale=0.01, unit="%")

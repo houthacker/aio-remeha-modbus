@@ -34,8 +34,8 @@ async def test_appliance(remeha_modbus_unit: MockModbusUnit):
     assert appliance.heat_pump_return_temperature == 22.54
     assert appliance.actual_water_pressure == 1.2
     assert appliance.flow_rate == 12.66
-    assert appliance.status == ApplianceStatus.manual_heat_demand
-    assert appliance.substatus == ApplianceSubStatus.power_controlled
+    assert appliance.appliance_status == ApplianceStatus.manual_heat_demand
+    assert appliance.appliance_substatus == ApplianceSubStatus.power_controlled
     assert appliance.actual_relative_power == 0.5
     assert appliance.generator_starts_total == 1234
     assert appliance.backup1_starts == 321

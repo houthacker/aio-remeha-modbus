@@ -127,8 +127,8 @@ async def test_read_appliance(remeha_api: RemehaApi):
     assert appliance.silent_mode_start_time == time(hour=22)
     assert appliance.silent_mode_end_time == time(hour=7)
 
-    assert ctrl_monitoring.status is not None
-    status: MonitoringStatus = ctrl_monitoring.status
+    assert ctrl_monitoring.monitoring_status is not None
+    status: MonitoringStatus = ctrl_monitoring.monitoring_status
 
     assert (
         status

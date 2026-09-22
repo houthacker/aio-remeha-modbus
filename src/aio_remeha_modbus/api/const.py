@@ -1,7 +1,7 @@
 """Constants for the Remeha Modbus API."""
 
 from datetime import date
-from enum import Enum, IntEnum, StrEnum, auto
+from enum import Enum, IntEnum, StrEnum
 from typing import Final
 
 from pydantic.dataclasses import dataclass
@@ -14,11 +14,22 @@ REMEHA_MAX_SPAN: Final[int] = 40
 """Largest single block read is 40 registers"""
 
 REMEHA_ZONE_RESERVED_REGISTERS: Final[int] = 512
-REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS: Final[int] = 6
+"""The register count of a `ClimateZone`."""
+
+REMEHA_DEVICE_BOARD_RESERVED_REGISTERS: Final[int] = 6
+"""The register count of a `DeviceBoard`."""
+
 REMEHA_TIME_PROGRAM_RESERVED_REGISTERS: Final[int] = 70
+"""The register count of a full time program for all days of the week (`dict[Weekday, ZoneSchedule]`)."""
+
 REMEHA_TIME_PROGRAM_BYTE_SIZE: Final[int] = 20
+"""The byte size of a single encoded `ZoneSchedule`."""
+
 REMEHA_TIME_PROGRAM_SLOT_SIZE: Final[int] = 3
+"""The byte size of a single encoded `Timeslot`."""
+
 REMEHA_TIME_STEP_MINUTES: Final[int] = 10
+"""The duration of a single time step in a `SteppedTimeOfDay`."""
 
 AUTO_SCHEDULE_MINIMAL_END_HOUR: Final[int] = 21
 """The minimal latest hour required to create a useful auto schedule.
@@ -78,22 +89,6 @@ class BoilerConfiguration:
 
     energy_label: Final[BoilerEnergyLabel | None]
     """The boiler energy label, if the heat loss rate is not available."""
-
-
-class ConnectionType(StrEnum):
-    """Defines the type of modbus connection."""
-
-    TCP = auto()
-    """TCP/IP connection with socket framer, used with Ethernet enabled devices."""
-
-    UDP = auto()
-    """UDP connection with socker framer."""
-
-    RTU_OVER_TCP = "rtuovertcp"
-    """TCP/IP connection with RTU framer, used when connecting to modbus forwarders."""
-
-    SERIAL = auto()
-    """Serial connection with RTU framer, used with TTY port or USB rs485 converter."""
 
 
 class ClimateZoneScheduleId(IntEnum):

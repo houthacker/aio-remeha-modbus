@@ -6,7 +6,7 @@ from functools import cached_property
 from modbus_connection.model import repeating_group, uint32
 from pydantic.dataclasses import dataclass
 
-from aio_remeha_modbus.api.const import REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS, REMEHA_MAX_SPAN
+from aio_remeha_modbus.api.const import REMEHA_DEVICE_BOARD_RESERVED_REGISTERS, REMEHA_MAX_SPAN
 from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import BytePosition, uint8, uint16
 
@@ -115,7 +115,7 @@ class DeviceBoard(RemehaComponent):
         resolved = self.resolved_fields["_type"]
         address = resolved.address - 129  # normalize address
 
-        return int(address / REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS)
+        return int(address / REMEHA_DEVICE_BOARD_RESERVED_REGISTERS)
 
     @cached_property
     def board_category(self) -> DeviceBoardCategory | None:
@@ -198,7 +198,7 @@ class SystemDiscoveryTable(RemehaComponent):
     device_boards = repeating_group(
         uint8(address=128),  # number of device boards
         component_class=DeviceBoard,
-        stride=REMEHA_DEVICE_INSTANCE_RESERVED_REGISTERS,
+        stride=REMEHA_DEVICE_BOARD_RESERVED_REGISTERS,
     )
     """The list of device boards available on the appliance."""
 

@@ -124,8 +124,8 @@ class MainControlMonitoring(RemehaComponent):
     error_priority = enum(address=278, enum_type=ApplianceErrorPriority)
     """The current appliance error priority."""
 
-    status = flags(address=279, flag_type=MonitoringStatus, count=2)
-    """Various appliance-level status fields."""
+    monitoring_status = flags(address=279, flag_type=MonitoringStatus, count=2)
+    """Various appliance-level monitoring status fields."""
 
     def error_as_str(self) -> str:
         """Return a user-friendly string representing the current error."""
