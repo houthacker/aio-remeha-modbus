@@ -29,6 +29,7 @@ from aio_remeha_modbus.api.schedule import (
 )
 from aio_remeha_modbus.helpers.fields import int16, nullable_binary, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import TimeOfDay
+from aio_remeha_modbus.helpers.validation import in_range
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -249,6 +250,21 @@ class ClimateZone(RemehaComponent):
     mode = enum(address=649, enum_type=ClimateZoneMode, nan=0xFF, writable=True)
     """The current mode the zone is in."""
 
+    room_setpoint_1 = uint16(address=650, scale=0.1, writable=in_range(range(5, 31)), unit="°C")
+    """Room setpoint in ECO mode"""
+
+    room_setpoint_2 = uint16(address=651, scale=0.1, writable=in_range(range(5, 31)), unit="°C")
+    """Room setpoint in COMFORT mode"""
+
+    room_setpoint_3 = uint16(address=652, scale=0.1, writable=in_range(range(5, 31)), unit="°C")
+    """Room setpoint in AWAY mode"""
+
+    room_setpoint_4 = uint16(address=653, scale=0.1, writable=in_range(range(5, 31)), unit="°C")
+    """Room setpoint in MORNING mode"""
+
+    room_setpoint_5 = uint16(address=654, scale=0.1, writable=in_range(range(5, 31)), unit="°C")
+    """Room setpoint in EVENING mode"""
+
     room_cooling_setpoint_1 = uint16(address=656, scale=0.1, writable=True, unit="°C")
     """Cooling setpoint in ECO mode"""
 
@@ -456,8 +472,21 @@ class ClimateZone(RemehaComponent):
         _LOGGER.warning("Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id)
         return None
 
-    def _get_heating_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float:
-        raise NotImplementedError
+    def _get_heating_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float | None:
+        match setpoint_type:
+            case TimeslotSetpointType.ECO:
+                return self.room_setpoint_1
+            case TimeslotSetpointType.COMFORT:
+                return self.room_setpoint_2
+            case TimeslotSetpointType.AWAY:
+                return self.room_setpoint_3
+            case TimeslotSetpointType.MORNING:
+                return self.room_setpoint_4
+            case TimeslotSetpointType.EVENING:
+                return self.room_setpoint_5
+
+        _LOGGER.warning("Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id)
+        return None
 
     def _get_current_ch_scheduling_setpoint(self) -> float | None:
         if self.temporary_room_setpoint_end_time is not None:
@@ -743,10 +772,15 @@ class ClimateZone(RemehaComponent):
             RemehaApiError(`translation_key="zone_ownership_error"`): If the schedule does nog belong
             to this zone.
 
+            RemehaApiError(`translation_key="schedule_write_not_supported"`): If this zone is not a DHW zone.
+
         """
 
         if schedule.zone_id != self.id:
             raise RemehaApiError("zone_ownership_error")
+
+        if not self.is_domestic_hot_water():
+            raise RemehaApiError("schedule_write_not_supported")
 
         _day_schedule = _DaySchedule(
             unit=self.modbus_unit,
@@ -764,6 +798,8 @@ class ClimateZone(RemehaComponent):
         Setting the current schedule also updates `selected_schedule` to `schedule.id`.
 
         Raises:
+            RemehaApiError(`translation_key="schedule_write_not_supported"`): If this zone is not a DHW zone.
+
             RemehaApiError(`translation_key="zone_ownership_error"`): If any schedule does nog belong
             to this zone.
 
@@ -771,6 +807,10 @@ class ClimateZone(RemehaComponent):
             or if all `ZoneSchedule`s don't share the same `ClimateZoneScheduleId`.
 
         """
+
+        # Writing a schedule is only supported for DHW schedules
+        if not self.is_domestic_hot_water():
+            raise RemehaApiError("schedule_write_not_supported")
 
         # All week days must be assigned a schedule.
         if len([schedule]) != len(Weekday):

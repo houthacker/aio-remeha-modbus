@@ -1,7 +1,7 @@
 """Tests for ClimateZone."""
 
 from datetime import datetime, time
-from typing import Final
+from typing import Final, cast
 
 import pytest
 from dateutil import tz
@@ -16,7 +16,7 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneType,
 )
 from aio_remeha_modbus.api.const import REMEHA_ZONE_RESERVED_REGISTERS, Weekday
-from aio_remeha_modbus.api.errors import InvalidZoneSchedule
+from aio_remeha_modbus.api.errors import InvalidZoneSchedule, RemehaApiError
 from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
@@ -186,6 +186,75 @@ async def test_climate_zone_ch_get_current_cooling_setpoint(remeha_api: RemehaAp
 
     with freeze_time("2026-06-01 21:00:00", tz_offset=-2):
         assert zone.current_setpoint == 22.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "remeha_modbus_unit", ["modbus_store_ch_heating_scheduling.json"], indirect=True
+)
+async def test_climate_zone_ch_get_current_heating_setpoint(remeha_api: RemehaApi):
+    """Test retrieval of the current heating setpoint of a CH climate zone in scheduling mode."""
+
+    zone: ClimateZone | None = remeha_api.zones[0]
+    assert zone is not None
+
+    assert not zone.is_domestic_hot_water()
+    assert zone.is_central_heating()
+    assert not zone.appliance_requires_cooling
+
+    assert zone.mode == ClimateZoneMode.SCHEDULING
+    assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_1
+
+    # Validate the schedule for a monday (all days have the same schedule in the mock data)
+    # Mock data is encoded as follows:
+    # 00:00 - 07:00 SLEEP
+    # 07:00 - 15:00 AWAY
+    # 15:00 - 18:00 HOME
+    # 18:00 - 21:00 COMFORT
+    # 21:00 - 00:00 EVENING
+    with freeze_time("2026-06-01 00:00:00", tz_offset=-2):
+        assert zone.current_setpoint == 20.5
+
+    with freeze_time("2026-06-01 07:00:00", tz_offset=-2):
+        assert zone.current_setpoint == 21.5
+
+    with freeze_time("2026-06-01 15:00:00", tz_offset=-2):
+        assert zone.current_setpoint == 21.0
+
+    with freeze_time("2026-06-01 18:00:00", tz_offset=-2):
+        assert zone.current_setpoint == 20.0
+
+    with freeze_time("2026-06-01 21:00:00", tz_offset=-2):
+        assert zone.current_setpoint == 22.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "remeha_modbus_unit", ["modbus_store_ch_heating_scheduling.json"], indirect=True
+)
+async def test_write_ch_zone_schedule_not_supported(remeha_api: RemehaApi):
+    """Test that writing the schedule of a non-DHW zone raises an error."""
+
+    zone: ClimateZone | None = remeha_api.zones[0]
+    assert zone is not None
+    assert zone.current_schedule is not None
+    assert zone.current_schedule[Weekday.MONDAY] is not None
+
+    # Cannot set the current schedule
+    with pytest.raises(
+        RemehaApiError, check=lambda e: e.translation_key == "schedule_write_not_supported"
+    ):
+        await zone.async_set_current_schedule(
+            cast(dict[Weekday, ZoneSchedule], zone.current_schedule)
+        )
+
+    # Cannot write a single schedule
+    with pytest.raises(
+        RemehaApiError, check=lambda e: e.translation_key == "schedule_write_not_supported"
+    ):
+        await zone.async_set_single_schedule(
+            cast(ZoneSchedule, zone.current_schedule[Weekday.MONDAY])
+        )
 
 
 @pytest.mark.asyncio

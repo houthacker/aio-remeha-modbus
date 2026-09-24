@@ -1,5 +1,6 @@
 """Validation helper functions."""
 
+from collections.abc import Callable
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -22,3 +23,15 @@ def require_not_none[T](value: T, message: str = "Require a value, but got None"
         return value
 
     raise ValueError(message, args)
+
+
+def in_range(r: range) -> Callable[[int], int]:
+    """Return a `Callable` which validates that a value is within a given range."""
+
+    def _validate(value: int):
+        if value in r:
+            return value
+
+        raise ValueError(f"Value {value} not in {r} (exclusive)")
+
+    return _validate
