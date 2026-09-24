@@ -286,7 +286,7 @@ class ClimateZone(RemehaComponent):
     Do not write to this field directly, instead call `await zone.async_set_current_setpoint()`
     """
 
-    room_setpoint = uint16(address=664, scale=0.1, writable=True, unit="°C")
+    room_manual_setpoint = uint16(address=664, scale=0.1, writable=True, unit="°C")
     """The current room temperature setpoint"""
 
     dhw_comfort_setpoint = uint16(address=665, scale=0.01, writable=True, unit="°C")
@@ -567,7 +567,7 @@ class ClimateZone(RemehaComponent):
                 case ClimateZoneMode.SCHEDULING:
                     return self._get_current_ch_scheduling_setpoint()
                 case ClimateZoneMode.MANUAL:
-                    return self.room_setpoint
+                    return self.room_manual_setpoint
                 case ClimateZoneMode.ANTI_FROST:
                     return self.min_temp
         if self.is_domestic_hot_water():
@@ -685,7 +685,7 @@ class ClimateZone(RemehaComponent):
                         setpoint, hours=cast(int, Limits.SCHEDULING_SETPOINT_OVERRIDE_DURATION)
                     )
                 case ClimateZoneMode.MANUAL:
-                    await self.write("room_setpoint", setpoint)
+                    await self.write("room_manual_setpoint", setpoint)
                 case _:
                     pass
 
@@ -772,25 +772,25 @@ class ClimateZone(RemehaComponent):
             RemehaApiError(`translation_key="zone_ownership_error"`): If the schedule does nog belong
             to this zone.
 
-            RemehaApiError(`translation_key="schedule_write_not_supported"`): If this zone is not a DHW zone.
+            RemehaApiError(`translation_key="schedule_write_not_supported"`): If the schedule is a CH heating schedule
 
         """
 
         if schedule.zone_id != self.id:
             raise RemehaApiError("zone_ownership_error")
 
-        if not self.is_domestic_hot_water():
+        if self.is_domestic_hot_water() or schedule.id is ClimateZoneScheduleId.SCHEDULE_4:
+            _day_schedule = _DaySchedule(
+                unit=self.modbus_unit,
+                index=schedule.day + 1,
+                base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=schedule.id),
+                id=schedule.id,
+                zone_id=self.id,
+            )
+
+            await _day_schedule.async_set_schedule(schedule)
+        else:
             raise RemehaApiError("schedule_write_not_supported")
-
-        _day_schedule = _DaySchedule(
-            unit=self.modbus_unit,
-            index=schedule.day + 1,
-            base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=schedule.id),
-            id=schedule.id,
-            zone_id=self.id,
-        )
-
-        await _day_schedule.async_set_schedule(schedule)
 
     async def async_set_current_schedule(self, schedule: dict[Weekday, ZoneSchedule]):
         """Write a full schedule.
@@ -808,12 +808,8 @@ class ClimateZone(RemehaComponent):
 
         """
 
-        # Writing a schedule is only supported for DHW schedules
-        if not self.is_domestic_hot_water():
-            raise RemehaApiError("schedule_write_not_supported")
-
         # All week days must be assigned a schedule.
-        if len([schedule]) != len(Weekday):
+        if len(schedule) != len(Weekday):
             raise RemehaApiError("invalid_schedule")
 
         # All schedules must belong to this zone.
@@ -821,24 +817,31 @@ class ClimateZone(RemehaComponent):
             raise RemehaApiError("zone_ownership_error")
 
         # Finally, all schedules must share the same `id`.
-        if len({s.id for s in schedule.values()}) > 1:
+        if len({s.id for s in schedule.values() if s is not None}) > 1:
             raise RemehaApiError("invalid_schedule")
 
-        # Sequentially write all schedules.
-        for s in schedule.values():
-            _day_schedule = _DaySchedule(
-                unit=self.modbus_unit,
-                index=s.day + 1,
-                base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=s.id),
-                id=s.id,
-                zone_id=self.id,
-            )
+        # Writing a schedule is only supported for DHW schedules and CH cooling schedules
+        if (
+            self.is_domestic_hot_water()
+            or schedule[Weekday(0)].id is ClimateZoneScheduleId.SCHEDULE_4
+        ):
+            # Sequentially write all schedules.
+            for s in schedule.values():
+                _day_schedule = _DaySchedule(
+                    unit=self.modbus_unit,
+                    index=s.day + 1,
+                    base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=s.id),
+                    id=s.id,
+                    zone_id=self.id,
+                )
 
-            await _day_schedule.async_set_schedule(s)
+                await _day_schedule.async_set_schedule(s)
 
-        # Select the current schedule.
-        await self.async_set_selected_schedule(schedule[Weekday.MONDAY].id)
-        self._current_schedule = dict(schedule.items())
+            # Select the current schedule.
+            await self.async_set_selected_schedule(schedule[Weekday.MONDAY].id)
+            self._current_schedule = dict(schedule.items())
+        else:
+            raise RemehaApiError("schedule_write_not_supported")
 
     def __eq__(self, other) -> bool:
         """Compare this `ClimateZone` with another for equality.

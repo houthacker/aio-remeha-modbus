@@ -230,10 +230,43 @@ async def test_climate_zone_ch_get_current_heating_setpoint(remeha_api: RemehaAp
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
+    "remeha_modbus_unit", ["modbus_store_ch_cooling_scheduling.json"], indirect=True
+)
+async def test_write_ch_zone_cooling_schedule_is_supported(remeha_api: RemehaApi):
+    """Test that writing the schedule of a non-DHW cooling schedule is supported."""
+
+    zone: ClimateZone | None = remeha_api.zones[0]
+    assert zone is not None
+    assert zone.current_schedule is not None
+    assert zone.current_schedule[Weekday.MONDAY] is not None
+
+    # Enforce a cooling schedule.
+    for schedule in [s for s in zone.current_schedule.values() if s is not None]:
+        schedule.id = ClimateZoneScheduleId.SCHEDULE_4
+
+    # Can set the current schedule
+    await zone.async_set_current_schedule(
+        cast(
+            dict[Weekday, ZoneSchedule],
+            {Weekday.MONDAY: zone.current_schedule[Weekday.MONDAY]}
+            | {
+                day: zone.current_schedule[Weekday.MONDAY]
+                for day in Weekday
+                if day is not Weekday.MONDAY
+            },
+        )
+    )
+
+    # Can write a single schedule
+    await zone.async_set_single_schedule(cast(ZoneSchedule, zone.current_schedule[Weekday.MONDAY]))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
     "remeha_modbus_unit", ["modbus_store_ch_heating_scheduling.json"], indirect=True
 )
-async def test_write_ch_zone_schedule_not_supported(remeha_api: RemehaApi):
-    """Test that writing the schedule of a non-DHW zone raises an error."""
+async def test_write_ch_zone_heating_schedule_not_supported(remeha_api: RemehaApi):
+    """Test that writing the schedule of a non-DHW heating schedule raises an error."""
 
     zone: ClimateZone | None = remeha_api.zones[0]
     assert zone is not None
@@ -285,7 +318,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     await zone.async_set_current_setpoint(20.5)
     await zone.async_update()
     assert zone.current_setpoint == 20.5
-    assert zone.room_setpoint == 20.5
+    assert zone.room_manual_setpoint == 20.5
     assert zone.dhw_comfort_setpoint is None
     assert zone.dhw_reduced_setpoint is None
     assert zone.temporary_room_setpoint is None
@@ -307,7 +340,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.current_setpoint == 50
     assert zone.dhw_comfort_setpoint == 50
     assert zone.dhw_reduced_setpoint is None
-    assert zone.room_setpoint is None
+    assert zone.room_manual_setpoint is None
     assert zone.temporary_room_setpoint is None
 
     # Validate setpoint for DHW zone in SCHEDULING mode.
@@ -331,7 +364,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.current_setpoint != 51
     assert zone.dhw_comfort_setpoint != 51
     assert zone.dhw_reduced_setpoint != 51
-    assert zone.room_setpoint != 51
+    assert zone.room_manual_setpoint != 51
     assert zone.temporary_room_setpoint != 51
 
     # Validate setpoint for DHW zone in ANTI_FROST mode, reset temporary setpoint.
@@ -350,7 +383,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.current_setpoint == 25
     assert zone.dhw_comfort_setpoint is None
     assert zone.dhw_reduced_setpoint == 25
-    assert zone.room_setpoint is None
+    assert zone.room_manual_setpoint is None
     assert zone.temporary_room_setpoint is None
 
     # reset dhw reduced setpoint

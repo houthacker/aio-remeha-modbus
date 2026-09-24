@@ -76,7 +76,7 @@ async def test_read_zone(remeha_api):
     assert zone.mode == ClimateZoneMode.MANUAL
     assert zone.owning_device == 1
     assert zone.pump_running is True
-    assert zone.room_setpoint == 20.0
+    assert zone.room_manual_setpoint == 20.0
     assert zone.room_temperature == 23.2
     assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_1
     assert zone.short_name == "CIRCA1"
