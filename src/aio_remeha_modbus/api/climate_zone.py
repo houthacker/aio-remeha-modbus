@@ -707,6 +707,31 @@ class ClimateZone(RemehaComponent):
                 "Setting setpoint not supported for climate zones of type %s", self.type
             )
 
+    async def async_set_room_setpoint_1(self, value: float):
+        """Write the `ECO` room setpoint for heating."""
+
+        await self.write("room_setpoint_1", value)
+
+    async def async_set_room_setpoint_2(self, value: float):
+        """Write the `COMFORT` room setpoint for heating."""
+
+        await self.write("room_setpoint_2", value)
+
+    async def async_set_room_setpoint_3(self, value: float):
+        """Write the `AWAY` room setpoint for heating."""
+
+        await self.write("room_setpoint_3", value)
+
+    async def async_set_room_setpoint_4(self, value: float):
+        """Write the `MORNING` room setpoint for heating."""
+
+        await self.write("room_setpoint_4", value)
+
+    async def async_set_room_setpoint_5(self, value: float):
+        """Write the `EVENING` room setpoint for heating."""
+
+        await self.write("room_setpoint_5", value)
+
     async def async_set_room_cooling_setpoint_1(self, value: float):
         """Write the `ECO` room setpoint."""
 
