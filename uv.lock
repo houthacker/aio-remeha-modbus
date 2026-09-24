@@ -32,7 +32,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "modbus-connection", specifier = "~=4.10.0" },
+    { name = "modbus-connection", specifier = "~=4.12.1" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
 ]
@@ -41,7 +41,7 @@ requires-dist = [
 dev = [
     { name = "build", specifier = ">=1.5.0" },
     { name = "freezegun", specifier = ">=1.5.5" },
-    { name = "modbus-connection", extras = ["tmodbus"], specifier = "~=4.10.0" },
+    { name = "modbus-connection", extras = ["tmodbus"], specifier = "~=4.12.1" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pyclean", specifier = ">=3.7.0" },
     { name = "pytest", specifier = ">=9.1.1" },
@@ -471,11 +471,11 @@ wheels = [
 
 [[package]]
 name = "modbus-connection"
-version = "4.10.0"
+version = "4.12.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f1/29/701cb11593839b334c9a388e43dde4d61abdc8939d74003b4d60b546b812/modbus_connection-4.10.0.tar.gz", hash = "sha256:fb328d011c6268bd1e272a0600373794a07bc453d4e9358498789312e0c1e0f2", size = 256827, upload-time = "2026-08-25T09:47:12.384Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/d5/6e29597e70bbe791e75a1949a1bb7d5519a187ed9d2ca73b71f1a4cb6b60/modbus_connection-4.12.1.tar.gz", hash = "sha256:041e9ab4992b1429a05b432598134a99afb5f087a86c3acc755e8d617beb10f1", size = 277463, upload-time = "2026-09-14T04:15:20.758Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/07/39374fc700ecac019d23c65696748a3a75e7390c797c09b51c114b04289d/modbus_connection-4.10.0-py3-none-any.whl", hash = "sha256:1a2256de5d427f89d422d1bbf52fdeda1a58e6e4f97acdb226e581dcad263700", size = 78284, upload-time = "2026-08-25T09:47:11.18Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/11/171f8301b85c4d074bb9bc29350d2ae8a482d01921495ce7417df72e3abd/modbus_connection-4.12.1-py3-none-any.whl", hash = "sha256:6d7ae44d7d3fb48422a3d18df8632ae6b9e3c64172c3b5018a956ce6fad5e262", size = 86274, upload-time = "2026-09-14T04:15:19.558Z" },
 ]
 
 [package.optional-dependencies]
