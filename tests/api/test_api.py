@@ -1,10 +1,10 @@
-"""Tests for RemehaApi."""
+"""Tests for the GTW08 device."""
 
 from datetime import time
 
 import pytest
 
-from aio_remeha_modbus.api.api import RemehaApi
+from aio_remeha_modbus.api import GTW08
 from aio_remeha_modbus.api.appliance import (
     Appliance,
     CoolingType,
@@ -28,21 +28,19 @@ from aio_remeha_modbus.api.schedule import (
 )
 from aio_remeha_modbus.helpers.fields import decode_bytes
 
-# from tests.util.registers import SENSOR_REGISTERS
-
 
 @pytest.mark.asyncio
-async def test_read_single_variable(remeha_api):
+async def test_read_single_variable(gtw_08):
     """Test that the API can be created and a single register be read."""
 
-    assert len(remeha_api.discovery_table.device_boards) == 2
+    assert len(gtw_08.discovery_table.device_boards) == 2
 
 
 @pytest.mark.asyncio
-async def test_read_device_instance(remeha_api: RemehaApi):
+async def test_read_device_instance(gtw_08: GTW08):
     """Test that a device can be read through the modbus interface."""
 
-    device_board = remeha_api.discovery_table.device_boards[0]
+    device_board = gtw_08.discovery_table.device_boards[0]
 
     assert device_board is not None
     assert device_board.id == 0
@@ -54,10 +52,10 @@ async def test_read_device_instance(remeha_api: RemehaApi):
 
 
 @pytest.mark.asyncio
-async def test_read_zone(remeha_api):
+async def test_read_zone(gtw_08):
     """Read a single zone."""
 
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
 
     assert zone is not None
     assert zone.current_setpoint == 20.0
@@ -87,11 +85,11 @@ async def test_read_zone(remeha_api):
 
 
 @pytest.mark.asyncio
-async def test_read_zone_update(remeha_api):
+async def test_read_zone_update(gtw_08):
     """Read a zone update from the modbus device."""
 
     # Read a single zone
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
     assert zone is not None
     assert zone.is_central_heating()
     assert zone.mode == ClimateZoneMode.MANUAL
@@ -113,15 +111,15 @@ async def test_read_zone_update(remeha_api):
 async def test_health_check(mock_modbus_unit):
     """Test a health check can be run without raising an exception."""
 
-    await RemehaApi.async_health_check(mock_modbus_unit)
+    await GTW08.async_health_check(mock_modbus_unit)
 
 
 @pytest.mark.asyncio
-async def test_read_appliance(remeha_api: RemehaApi):
+async def test_read_appliance(gtw_08: GTW08):
     """Test that the API can read the appliance status from the modbus device."""
 
-    appliance: Appliance = remeha_api.appliance
-    ctrl_monitoring = remeha_api.main_control_monitoring
+    appliance: Appliance = gtw_08.appliance
+    ctrl_monitoring = gtw_08.main_control_monitoring
     assert ctrl_monitoring.current_error == int("0223", 16)  # H02.23 Flow rate error.
     assert ctrl_monitoring.error_priority == ApplianceErrorPriority.BLOCKING
     assert appliance.ch_enabled
@@ -144,10 +142,10 @@ async def test_read_appliance(remeha_api: RemehaApi):
 
 
 @pytest.mark.asyncio
-async def test_read_registers(remeha_api: RemehaApi):
+async def test_read_registers(gtw_08: GTW08):
     """Test that the api can read an arbitrary set of registers."""
 
-    assert await remeha_api.async_read_registers(address=130, count=4, struct_format=">HHHH") == (
+    assert await gtw_08.async_read_registers(address=130, count=4, struct_format=">HHHH") == (
         0x0101,
         0x0102,
         0x0201,
@@ -156,18 +154,18 @@ async def test_read_registers(remeha_api: RemehaApi):
 
 
 @pytest.mark.asyncio
-async def test_read_too_many_registers(remeha_api: RemehaApi):
+async def test_read_too_many_registers(gtw_08: GTW08):
     """Test that the api doesn't allow reading a register count exceeding REMEHA_MAX_SPAN."""
 
     count = REMEHA_MAX_SPAN + 1
     with pytest.raises(
         ValueError, match=f"Illegal count {count}: must be between 1 and {REMEHA_MAX_SPAN}."
     ):
-        assert await remeha_api.async_read_registers(address=649, count=count)
+        assert await gtw_08.async_read_registers(address=649, count=count)
 
 
 @pytest.mark.asyncio
-async def test_overwrite_zone_schdule(remeha_api: RemehaApi):
+async def test_overwrite_zone_schdule(gtw_08: GTW08):
     """Test that the API can overwrite a single ZoneSchedule."""
 
     expected: bytes = bytes.fromhex("05 c81024 c8302a c82036 c84060 c80087 0000 0000")
@@ -205,7 +203,7 @@ async def test_overwrite_zone_schdule(remeha_api: RemehaApi):
     )
 
     registers: list[int] = list(
-        await remeha_api.async_read_registers(759, count=10, struct_format=">HHHHHHHHHH")
+        await gtw_08.async_read_registers(759, count=10, struct_format=">HHHHHHHHHH")
     )
     encoded_bytes = decode_bytes(registers)
 
@@ -213,10 +211,8 @@ async def test_overwrite_zone_schdule(remeha_api: RemehaApi):
     assert encoded_bytes != expected
 
     # Overwrite the new schedule
-    await remeha_api.async_overwrite_zone_schedule(schedule)
+    await gtw_08.async_overwrite_zone_schedule(schedule)
 
     # Re-read the registers and verify
-    registers = list(
-        await remeha_api.async_read_registers(759, count=10, struct_format=">HHHHHHHHHH")
-    )
+    registers = list(await gtw_08.async_read_registers(759, count=10, struct_format=">HHHHHHHHHH"))
     assert decode_bytes(registers) == expected

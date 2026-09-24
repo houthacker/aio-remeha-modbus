@@ -1,15 +1,11 @@
 """Implementation of the Remeha Modbus API."""
 
-import logging
 import struct
 from datetime import tzinfo
 from typing import Any
 
 from modbus_connection import ModbusExceptionError, ModbusUnit
-from modbus_connection.model import (
-    Component,
-    ManualComponent,
-)
+from modbus_connection.model import Component, Device, ManualComponent
 
 from aio_remeha_modbus.api.appliance import (
     Appliance,
@@ -28,11 +24,9 @@ from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
 from aio_remeha_modbus.api.system_discovery_table import SystemDiscoveryTable
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
 
-_LOGGER = logging.getLogger(__name__)
 
-
-class RemehaApi:
-    """Use instances of this class to interact with the Remeha device through Modbus."""
+class GTW08(Device):
+    """Represents a GTW-08 modbus gateway."""
 
     def __init__(
         self,
@@ -40,24 +34,24 @@ class RemehaApi:
         unit: ModbusUnit,
         time_zone: tzinfo | None = None,
         message_spacing_seconds: float = 0.00175,
+        request_timeout: float = 0.003,
     ):
-        """Create a new API instance.
+        """Create a new GTW08 device instance.
 
-        When creating a new `RemehaApi`, the message spacing and timeout are
+        When creating a new `GTW08`, the message spacing and timeout are
         set on `unit`.
 
         Args:
             name (str): An arbitrary name of this API.
-            unit (ModbusUnit): The unit to use to query the remote device.
-            time_zone (tzinfo|None): The time zone of the Remeha device.
+            unit (ModbusUnit): The unit to use to query the remote appliance.
+            time_zone (tzinfo|None): The time zone of the Remeha appliance.
             message_spacing_seconds (float): The required message spacing in seconds.
+            request_timeout (float): The required request timeout in seconds.
 
         """
 
         unit.set_message_spacing(message_spacing_seconds)
-
-        # TODO use unit.require_timeout after modbus-connection>=4.12.1
-        # timeout must be at least 0.003
+        unit.require_timeout(request_timeout)
 
         self._name = name
         self._unit = unit

@@ -42,9 +42,9 @@ $ remeha-query --transport serial socket://192.168.1.2:8899 --all
 ```
 
 #### Caching
-To retrieve fetch data from modbus, call `await RemehaApi.async_update()` explicitly. After that, the values are retained until the next update call.
+To retrieve fetch data from modbus, call `await GTW08.async_update()` explicitly. After that, the values are retained until the next update call.
 
-The discovery table in `RemehaApi.discovery_table` is only read at the first call to `async_update()`. To re-read the discovery table, restart the process running this API.
+The discovery table in `GTW08.discovery_table` is only read at the first call to `async_update()`. To re-read the discovery table, restart the process running this API.
 
 #### Error handling
 All errors raised by this library are intended to be translated.
@@ -58,15 +58,15 @@ to your appliances, and is agnostic to the way a connection is obtained.
 To create a new api instance, you need to obtain a `ModbusUnit` first. See [the modbus-connection docs](https://home-assistant-libs.github.io/modbus-connection/connection/connections-and-units/)
 on how to do that.
 
-### RemehaApi
-To create a new API instance, provide the `ModbusUnit` instance to the `RemehaApi` constructor.
+### GTW-08 device
+To create a new API instance, provide the `ModbusUnit` instance to the `GTW08` constructor.
 
 ### Appliance
-The connected Remeha appliance can be retrieved using `RemehaApi.appliance`.
+The connected Remeha appliance can be retrieved using `GTW08.appliance`.
 
 ### ClimateZone
 Zones, as they are configured in the Remeha appliance are exposed as `ClimateZone` instances
-and can be retrieved using `RemehaApi.zones`.
+and can be retrieved using `GTW08.zones`.
 
 ### Zone schedules
 When a `ClimateZone` is read from the appliance and its `mode` is `ClimateZoneMode.SCHEDULING`,

@@ -1,9 +1,9 @@
 """Package containing all Remeha Modbus API classes."""
 
 __all__ = [
-    "RemehaApi",
+    "GTW08",
 ]
 
 from .api import (
-    RemehaApi,
+    GTW08,
 )

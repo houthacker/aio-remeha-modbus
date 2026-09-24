@@ -12,7 +12,7 @@ from modbus_connection.cli_helper import (
     print_component,
 )
 
-from aio_remeha_modbus.api.api import RemehaApi
+from aio_remeha_modbus.api.api import GTW08
 from aio_remeha_modbus.api.appliance import Appliance
 from aio_remeha_modbus.api.climate_zone import ClimateZone
 from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
@@ -75,9 +75,9 @@ async def main() -> int:  # noqa: D103
     unit = CountingUnit(retrying_unit)
     try:
         if query_all:
-            r = RemehaApi(name="cli_api", unit=unit, time_zone=gettz(args.timezone))
+            r = GTW08(name="cli_api", unit=unit, time_zone=gettz(args.timezone))
             await r.async_update()
-            print(f"RemehaApi(name={r.name}, time_zone={r._time_zone})")  # noqa: SLF001, T201
+            print(f"GTW08(name={r.name}, time_zone={r._time_zone})")  # noqa: SLF001, T201
             print("\n")  # noqa: T201
             print_component(r.discovery_table, title="System Discovery Table")
             print("\n")  # noqa: T201

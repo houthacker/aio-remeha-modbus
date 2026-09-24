@@ -7,7 +7,7 @@ import pytest
 from dateutil import tz
 from freezegun import freeze_time
 
-from aio_remeha_modbus.api import RemehaApi
+from aio_remeha_modbus.api import GTW08
 from aio_remeha_modbus.api.climate_zone import (
     ClimateZone,
     ClimateZoneFunction,
@@ -89,37 +89,37 @@ def test_supported_climate_zone_functions():
 
 
 @pytest.mark.asyncio
-async def test_invalid_zone_schedule(remeha_api: RemehaApi):
+async def test_invalid_zone_schedule(gtw_08: GTW08):
     """Test that an invalid zone schedule read from modbus causes an InvalidZoneSchedule."""
 
-    zone: ClimateZone | None = remeha_api.zones[1]
+    zone: ClimateZone | None = gtw_08.zones[1]
     assert zone is not None
     assert zone.is_domestic_hot_water()
 
     # Store invalid values for the first zone schedule.
     # The first time slot is stored in byte 1-3 (inclusive, 0-based), so scramble that.
     update_raw_data(
-        remeha_api,
+        gtw_08,
         [
             (690 + REMEHA_ZONE_RESERVED_REGISTERS, 0x1515),  # garbage
         ],
     )
 
     with pytest.raises(InvalidZoneSchedule):
-        await remeha_api.async_update()
+        await gtw_08.async_update()
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_dhw_get_current_setpoint(remeha_api: RemehaApi):
+async def test_climate_zone_dhw_get_current_setpoint(gtw_08: GTW08):
     """Test retrieval of the current setpoint of a climate zone."""
 
-    zone: ClimateZone | None = remeha_api.zones[1]
+    zone: ClimateZone | None = gtw_08.zones[1]
     assert zone is not None
     assert zone.is_domestic_hot_water()
 
     # Prepare setpoint values
     update_raw_data(
-        remeha_api,
+        gtw_08,
         [
             (665 + REMEHA_ZONE_RESERVED_REGISTERS, 0x157C),  # 55 degrees C
             (666 + REMEHA_ZONE_RESERVED_REGISTERS, 0x09C4),  # 25 degrees C
@@ -127,41 +127,39 @@ async def test_climate_zone_dhw_get_current_setpoint(remeha_api: RemehaApi):
     )
 
     # Validate setpoint in SCHEDULING mode
-    update_raw_data(remeha_api, (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.SCHEDULING))
-    await remeha_api.async_update()
+    update_raw_data(gtw_08, (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.SCHEDULING))
+    await gtw_08.async_update()
     assert zone.current_setpoint is not None
 
     # Validate setpoint in MANUAL mode
-    update_raw_data(remeha_api, (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.MANUAL))
-    await remeha_api.async_update()
+    update_raw_data(gtw_08, (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.MANUAL))
+    await gtw_08.async_update()
     assert zone.current_setpoint == 55
 
     # Validate setpoint in ANTI_FROST mode
-    update_raw_data(remeha_api, (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.ANTI_FROST))
-    await remeha_api.async_update()
+    update_raw_data(gtw_08, (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.ANTI_FROST))
+    await gtw_08.async_update()
     assert zone.current_setpoint == 25
 
     # Validate setpoint in unsupported type
-    update_raw_data(
-        remeha_api, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL)
-    )
-    await remeha_api.async_update()
+    update_raw_data(gtw_08, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL))
+    await gtw_08.async_update()
     assert zone.current_setpoint is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("remeha_modbus_unit", ["modbus_store_ch_scheduling.json"], indirect=True)
-async def test_climate_zone_ch_get_current_cooling_setpoint(remeha_api: RemehaApi):
+async def test_climate_zone_ch_get_current_cooling_setpoint(gtw_08: GTW08):
     """Test retrieval of the current setpoint of a CH climate zone."""
 
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
     assert zone is not None
 
     assert not zone.is_domestic_hot_water()
     assert zone.is_central_heating()
 
     # Remeha uses schedule 4 for cooling, but doesn't expose it as selected.
-    # instead, schedule 1 is selected. RemehaApi maps this to schedule 4.
+    # instead, schedule 1 is selected. GTW08 maps this to schedule 4.
     assert zone.mode == ClimateZoneMode.SCHEDULING
     assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_4
 
@@ -192,10 +190,10 @@ async def test_climate_zone_ch_get_current_cooling_setpoint(remeha_api: RemehaAp
 @pytest.mark.parametrize(
     "remeha_modbus_unit", ["modbus_store_ch_heating_scheduling.json"], indirect=True
 )
-async def test_climate_zone_ch_get_current_heating_setpoint(remeha_api: RemehaApi):
+async def test_climate_zone_ch_get_current_heating_setpoint(gtw_08: GTW08):
     """Test retrieval of the current heating setpoint of a CH climate zone in scheduling mode."""
 
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
     assert zone is not None
 
     assert not zone.is_domestic_hot_water()
@@ -232,10 +230,10 @@ async def test_climate_zone_ch_get_current_heating_setpoint(remeha_api: RemehaAp
 @pytest.mark.parametrize(
     "remeha_modbus_unit", ["modbus_store_ch_cooling_scheduling.json"], indirect=True
 )
-async def test_write_ch_zone_cooling_schedule_is_supported(remeha_api: RemehaApi):
+async def test_write_ch_zone_cooling_schedule_is_supported(gtw_08: GTW08):
     """Test that writing the schedule of a non-DHW cooling schedule is supported."""
 
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
     assert zone is not None
     assert zone.current_schedule is not None
     assert zone.current_schedule[Weekday.MONDAY] is not None
@@ -265,10 +263,10 @@ async def test_write_ch_zone_cooling_schedule_is_supported(remeha_api: RemehaApi
 @pytest.mark.parametrize(
     "remeha_modbus_unit", ["modbus_store_ch_heating_scheduling.json"], indirect=True
 )
-async def test_write_ch_zone_heating_schedule_not_supported(remeha_api: RemehaApi):
+async def test_write_ch_zone_heating_schedule_not_supported(gtw_08: GTW08):
     """Test that writing the schedule of a non-DHW heating schedule raises an error."""
 
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
     assert zone is not None
     assert zone.current_schedule is not None
     assert zone.current_schedule[Weekday.MONDAY] is not None
@@ -291,15 +289,15 @@ async def test_write_ch_zone_heating_schedule_not_supported(remeha_api: RemehaAp
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_set_current_setpoint(remeha_api):
+async def test_climate_zone_set_current_setpoint(gtw_08):
     """Test setting the current setpoint of a DHW zone."""
 
-    zone: ClimateZone | None = remeha_api.zones[1]
+    zone: ClimateZone | None = gtw_08.zones[1]
     assert zone is not None
 
     # Prepare setpoint values, zone mode
     update_raw_data(
-        remeha_api,
+        gtw_08,
         [
             (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.MANUAL),  # zone mode
             (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.OTHER),  # zone type
@@ -325,7 +323,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
 
     # Reset room setpoint, set mode to manual
     update_raw_data(
-        remeha_api,
+        gtw_08,
         [
             (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.MANUAL),
             (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.OTHER),
@@ -347,7 +345,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     # Overriding current setpoint in SCHEDULING mode is not supported (by Remeha)
     # for DHW zones. So the setpoint must not be updated.
     update_raw_data(
-        remeha_api,
+        gtw_08,
         [
             (
                 649 + REMEHA_ZONE_RESERVED_REGISTERS,
@@ -369,7 +367,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
 
     # Validate setpoint for DHW zone in ANTI_FROST mode, reset temporary setpoint.
     update_raw_data(
-        remeha_api,
+        gtw_08,
         [
             (649 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneMode.ANTI_FROST),
             (663 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF),  # temporary setpoint
@@ -387,7 +385,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.temporary_room_setpoint is None
 
     # reset dhw reduced setpoint
-    update_raw_data(remeha_api, (666 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF))
+    update_raw_data(gtw_08, (666 + REMEHA_ZONE_RESERVED_REGISTERS, 0xFFFF))
     await zone.async_update()
 
     # Validate setpoint outside of min/max values
@@ -405,9 +403,7 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
     assert zone.current_setpoint == 25
 
     # Validate setting setpoint for unsupported zone
-    update_raw_data(
-        remeha_api, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL)
-    )
+    update_raw_data(gtw_08, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL))
     await zone.async_update()
 
     await zone.async_set_current_setpoint(30)
@@ -416,10 +412,10 @@ async def test_climate_zone_set_current_setpoint(remeha_api):
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_set_selected_schedule(remeha_api):
+async def test_climate_zone_set_selected_schedule(gtw_08):
     """Test that the CH schedule is always mapped to schedule_1 from schedule_4."""
 
-    zone: ClimateZone | None = remeha_api.zones[0]
+    zone: ClimateZone | None = gtw_08.zones[0]
     assert zone is not None
     assert zone.is_central_heating()
 
@@ -434,27 +430,25 @@ async def test_climate_zone_set_selected_schedule(remeha_api):
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_get_current_temperature(remeha_api):
+async def test_climate_zone_get_current_temperature(gtw_08):
     """Test the retrieval of the current temperature of a climate zone."""
 
-    zone: ClimateZone | None = remeha_api.zones[1]
+    zone: ClimateZone | None = gtw_08.zones[1]
     assert zone is not None
 
     assert zone.is_domestic_hot_water()
     assert zone.current_temparature == 53.2
 
-    update_raw_data(
-        remeha_api, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL)
-    )
+    update_raw_data(gtw_08, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL))
     await zone.async_update()
     assert zone.current_temparature == -1
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_equality(remeha_api):
+async def test_climate_zone_equality(gtw_08):
     """Test the equality of climate zones."""
 
-    zones: list[ClimateZone] = remeha_api.zones
+    zones: list[ClimateZone] = gtw_08.zones
 
     assert zones[0] != zones[1]
     assert zones[1] != ClimateZoneMode.MANUAL
@@ -464,11 +458,11 @@ async def test_climate_zone_equality(remeha_api):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("remeha_modbus_unit", ["modbus_store_ch_scheduling.json"], indirect=True)
-async def test_dhw_scheduling_temporary_setpoint(remeha_api: RemehaApi):
+async def test_dhw_scheduling_temporary_setpoint(gtw_08: GTW08):
     """Test that a temporary setpoint can be set if the zone is in scheduling mode."""
 
     # Retrieve a single zone.
-    zone: ClimateZone = remeha_api.zones[0]
+    zone: ClimateZone = gtw_08.zones[0]
     assert zone.mode == ClimateZoneMode.SCHEDULING
     assert zone.is_central_heating()
     assert zone.has_cooling_capability()
@@ -480,13 +474,13 @@ async def test_dhw_scheduling_temporary_setpoint(remeha_api: RemehaApi):
     temporary_setpoint = current_setpoint + 1
 
     await zone.async_set_current_setpoint(temporary_setpoint)
-    await remeha_api.async_update()
+    await gtw_08.async_update()
 
     assert zone.current_setpoint == temporary_setpoint
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_end_change_mode_time(remeha_api: RemehaApi):
+async def test_climate_zone_end_change_mode_time(gtw_08: GTW08):
     """Test that the temporary setpoint end time is read correctly."""
 
     expected: Final[datetime] = datetime(
@@ -499,12 +493,12 @@ async def test_climate_zone_end_change_mode_time(remeha_api: RemehaApi):
         tzinfo=tz.gettz("Europe/Amsterdam"),
     )
 
-    zone: ClimateZone = remeha_api.zones[0]
+    zone: ClimateZone = gtw_08.zones[0]
     assert zone.temporary_room_setpoint_end_time == expected
 
 
 @pytest.mark.asyncio
-async def test_write_zone_schedule(remeha_api: RemehaApi):
+async def test_write_zone_schedule(gtw_08: GTW08):
     """Test that a time program can be written to the modbus device."""
 
     expected_schedule = ZoneSchedule(
@@ -541,18 +535,18 @@ async def test_write_zone_schedule(remeha_api: RemehaApi):
     )
 
     # Retrieve schedule from modbus, must be None.
-    current_schedule = remeha_api.zones[1].current_schedule
+    current_schedule = gtw_08.zones[1].current_schedule
     assert current_schedule is not None
     actual_schedule = current_schedule[Weekday.FRIDAY]
     assert actual_schedule is not None
     assert actual_schedule != expected_schedule
 
-    await remeha_api.zones[1].async_set_single_schedule(expected_schedule)
-    await remeha_api.zones[1].async_set_selected_schedule(expected_schedule.id)
-    await remeha_api.async_update()
+    await gtw_08.zones[1].async_set_single_schedule(expected_schedule)
+    await gtw_08.zones[1].async_set_selected_schedule(expected_schedule.id)
+    await gtw_08.async_update()
 
     # Read it back and check if it was successful.
-    current_schedule = remeha_api.zones[1].current_schedule
+    current_schedule = gtw_08.zones[1].current_schedule
     assert current_schedule is not None
     actual_schedule = current_schedule[Weekday.FRIDAY]
 
@@ -560,7 +554,7 @@ async def test_write_zone_schedule(remeha_api: RemehaApi):
 
 
 @pytest.mark.asyncio
-async def test_write_cooling_schedule(remeha_api: RemehaApi):
+async def test_write_cooling_schedule(gtw_08: GTW08):
     """Test that a cooling schedule can be written to the modbus device."""
 
     expected_schedule = ZoneSchedule(
@@ -596,18 +590,18 @@ async def test_write_cooling_schedule(remeha_api: RemehaApi):
         ],
     )
 
-    await remeha_api.zones[0].async_set_mode(ClimateZoneMode.SCHEDULING)
-    await remeha_api.zones[0].async_set_selected_schedule(expected_schedule.id)
-    await remeha_api.zones[0].async_set_single_schedule(expected_schedule)
+    await gtw_08.zones[0].async_set_mode(ClimateZoneMode.SCHEDULING)
+    await gtw_08.zones[0].async_set_selected_schedule(expected_schedule.id)
+    await gtw_08.zones[0].async_set_single_schedule(expected_schedule)
 
     # TODO validate that the state is equal before and after the write.
-    await remeha_api.async_update()
+    await gtw_08.async_update()
 
     # Read it back and check if it was successful.
-    current_schedule = remeha_api.zones[0].current_schedule
+    current_schedule = gtw_08.zones[0].current_schedule
     assert current_schedule is not None
     actual_schedule = current_schedule[Weekday.FRIDAY]
 
     assert actual_schedule == expected_schedule
-    assert remeha_api.zones[0].mode is ClimateZoneMode.SCHEDULING
-    assert remeha_api.zones[0].selected_schedule is expected_schedule.id
+    assert gtw_08.zones[0].mode is ClimateZoneMode.SCHEDULING
+    assert gtw_08.zones[0].selected_schedule is expected_schedule.id

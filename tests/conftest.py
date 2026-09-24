@@ -11,7 +11,7 @@ from dateutil import tz
 from modbus_connection import ModbusUnit
 from modbus_connection.mock import MockModbusUnit
 
-from aio_remeha_modbus.api import RemehaApi
+from aio_remeha_modbus.api import GTW08
 
 TESTING_TIME_ZONE: Final[str] = "Europe/Amsterdam"
 
@@ -26,7 +26,7 @@ def json_fixture(file_name: str) -> Any:
     return json.loads(data)
 
 
-def get_modbus_unit(api: RemehaApi) -> MockModbusUnit:
+def get_modbus_unit(api: GTW08) -> MockModbusUnit:
     """Return the modbus unit from the given api.
 
     Raises:
@@ -42,11 +42,11 @@ def get_modbus_unit(api: RemehaApi) -> MockModbusUnit:
     return unit
 
 
-def update_raw_data(api: RemehaApi, data: tuple[int, int] | list[tuple[int, int]]):
+def update_raw_data(api: GTW08, data: tuple[int, int] | list[tuple[int, int]]):
     """Update the modbus data used by the given api.
 
     Args:
-        api (RemehaApi): The api to use.
+        api (GTW08): The api to use.
         data (list[tuple[int, int]]): A list of register/value tuples to update.
 
     """
@@ -71,16 +71,16 @@ def remeha_modbus_unit(request, mock_modbus_unit: MockModbusUnit) -> ModbusUnit:
 
 
 @pytest_asyncio.fixture
-async def remeha_api(
+async def gtw_08(
     request,
     remeha_modbus_unit: MockModbusUnit,
-) -> RemehaApi:
-    """Create a new RemehaApi instance with a mocked modbus client."""
+) -> GTW08:
+    """Create a new GTW08 device instance with a mocked modbus client."""
 
     # mock_modbus_client MUST be a mock, otherwise a real connection might be made and mess up the appliance.
     if not isinstance(remeha_modbus_unit, MockModbusUnit):
         pytest.fail(
-            f"Trying to create RemehaApi with non-mocked modbus client type {type(remeha_modbus_unit).__qualname__}."
+            f"Trying to create GTW08 device with non-mocked modbus client type {type(remeha_modbus_unit).__qualname__}."
         )
 
     require_update = (
@@ -93,7 +93,7 @@ async def remeha_api(
         else tz.gettz(TESTING_TIME_ZONE)
     )
 
-    api = RemehaApi(
+    api = GTW08(
         name=name,
         unit=remeha_modbus_unit,
         time_zone=time_zone,

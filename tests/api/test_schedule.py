@@ -4,7 +4,7 @@ from datetime import date, time
 
 import pytest
 
-from aio_remeha_modbus.api.api import RemehaApi
+from aio_remeha_modbus.api.api import GTW08
 from aio_remeha_modbus.api.const import (
     BoilerConfiguration,
     BoilerEnergyLabel,
@@ -162,7 +162,7 @@ def test_encode_time_schedule():
 
 
 @pytest.mark.asyncio
-async def test_generate_dhw_time_schedule(remeha_api: RemehaApi):
+async def test_generate_dhw_time_schedule(gtw_08: GTW08):
     """Test generating a time schedule for heating the DHW boiler."""
 
     weather_forecast: WeatherForecast = WeatherForecast(
@@ -185,8 +185,8 @@ async def test_generate_dhw_time_schedule(remeha_api: RemehaApi):
         volume=300, heat_loss_rate=None, energy_label=BoilerEnergyLabel.C
     )
 
-    appliance = remeha_api.appliance
-    zone = remeha_api.zones[1]
+    appliance = gtw_08.appliance
+    zone = gtw_08.zones[1]
     assert zone is not None
 
     schedule: ZoneSchedule = ZoneSchedule.generate(
@@ -233,7 +233,7 @@ async def test_generate_dhw_time_schedule(remeha_api: RemehaApi):
 
 
 @pytest.mark.asyncio
-async def test_generate_dhw_time_schedule_without_solar_yield(remeha_api):
+async def test_generate_dhw_time_schedule_without_solar_yield(gtw_08):
     """Test generating a time schedule for heating the DHW boiler on a day there is no solar yield."""
 
     weather_forecast: WeatherForecast = WeatherForecast(
@@ -256,8 +256,8 @@ async def test_generate_dhw_time_schedule_without_solar_yield(remeha_api):
         volume=300, heat_loss_rate=91.3, energy_label=None
     )
 
-    appliance = remeha_api.appliance
-    zone = remeha_api.zones[1]
+    appliance = gtw_08.appliance
+    zone = gtw_08.zones[1]
     assert zone is not None
 
     schedule: ZoneSchedule = ZoneSchedule.generate(
