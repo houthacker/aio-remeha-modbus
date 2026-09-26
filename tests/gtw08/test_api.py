@@ -1,8 +1,12 @@
 """Tests for the GTW08 device."""
 
+import struct
 from datetime import time
 
 import pytest
+from dateutil import tz
+from modbus_connection.exceptions import IllegalFunctionError
+from modbus_connection.mock import MockModbusUnit
 
 from aio_remeha_modbus.gtw08 import GTW08
 from aio_remeha_modbus.gtw08.appliance import (
@@ -18,7 +22,12 @@ from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, Weekday
+from aio_remeha_modbus.gtw08.const import (
+    REMEHA_MAX_SPAN,
+    REMEHA_ZONE_RESERVED_REGISTERS,
+    Weekday,
+)
+from aio_remeha_modbus.gtw08.errors import RemehaModbusError
 from aio_remeha_modbus.gtw08.main_control_monitoring import ApplianceErrorPriority, MonitoringStatus
 from aio_remeha_modbus.gtw08.schedule import (
     Timeslot,
@@ -215,3 +224,131 @@ async def test_overwrite_zone_schdule(gtw_08: GTW08):
     # Re-read the registers and verify
     registers = list(await gtw_08.async_read_registers(899, count=10, struct_format=">HHHHHHHHHH"))
     assert decode_bytes(registers) == expected
+
+
+@pytest.mark.asyncio
+async def test_health_check_failure(mock_modbus_unit: MockModbusUnit):
+    """Test that a failing health check is reported as a `RemehaModbusError`."""
+
+    mock_modbus_unit.fail_requests(IllegalFunctionError(exception_code=0x01))
+
+    with pytest.raises(RemehaModbusError) as exc_info:
+        await GTW08.async_health_check(mock_modbus_unit)
+
+    assert exc_info.value.translation_key == "health_check_failed"
+    assert isinstance(exc_info.value.__cause__, IllegalFunctionError)
+
+
+@pytest.mark.asyncio
+async def test_unit_settings(remeha_modbus_unit: MockModbusUnit):
+    """Test that message spacing and request timeout are set on the unit."""
+
+    GTW08(name="test", unit=remeha_modbus_unit)
+    assert remeha_modbus_unit.message_spacing == 0.00175
+    assert remeha_modbus_unit.required_timeout == 0.003
+
+    GTW08(name="test", unit=remeha_modbus_unit, message_spacing_seconds=0.5, request_timeout=2.0)
+    assert remeha_modbus_unit.message_spacing == 0.5
+    assert remeha_modbus_unit.required_timeout == 2.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gtw_08", [{"name": "custom", "require_update": False}], indirect=True)
+async def test_name(gtw_08: GTW08):
+    """Test that the name is the one given on creation."""
+
+    assert gtw_08.name == "custom"
+
+
+@pytest.mark.asyncio
+async def test_default_time_zone(remeha_modbus_unit: MockModbusUnit):
+    """Test that the api can be used without an explicit time zone."""
+
+    api = GTW08(name="test", unit=remeha_modbus_unit)
+    await api.async_update()
+
+    assert len(api.zones) == 2
+
+
+@pytest.mark.asyncio
+async def test_time_zone_is_passed_to_zones(remeha_modbus_unit: MockModbusUnit):
+    """Test that the time zone is passed to the climate zones."""
+
+    time_zone = tz.gettz("Europe/Amsterdam")
+    api = GTW08(name="test", unit=remeha_modbus_unit, time_zone=time_zone)
+    await api.async_update()
+
+    assert all(zone.time_zone is time_zone for zone in api.zones)
+
+
+@pytest.mark.asyncio
+async def test_disabled_zone_is_skipped(remeha_modbus_unit: MockModbusUnit):
+    """Test that a disabled zone is not read and not part of the zones."""
+
+    # The second zone is the DHW zone, disable it.
+    remeha_modbus_unit.holding[641 + REMEHA_ZONE_RESERVED_REGISTERS] = (
+        ClimateZoneFunction.DISABLED.value
+    )
+
+    api = GTW08(name="test", unit=remeha_modbus_unit)
+    await api.async_update()
+
+    assert len(api.zones) == 1
+    assert api.zones[0].id == 1
+    assert api.zones[0].function == ClimateZoneFunction.MIXING_CIRCUIT
+
+
+@pytest.mark.asyncio
+async def test_update_readings(gtw_08: GTW08):
+    """Test that updating readings does not poll the discovery table."""
+
+    unit = gtw_08._unit  # noqa: SLF001
+    assert isinstance(unit, MockModbusUnit)
+    unit.read_events.clear()
+
+    report = await gtw_08.async_update_readings()
+
+    assert report is not None
+    assert unit.read_events
+    assert all(not (128 <= event.address <= 200) for event in unit.read_events)
+
+
+@pytest.mark.asyncio
+async def test_update_settings(gtw_08: GTW08):
+    """Test that updating settings only polls the discovery table."""
+
+    unit = gtw_08._unit  # noqa: SLF001
+    assert isinstance(unit, MockModbusUnit)
+    unit.read_events.clear()
+    unit.holding[189] = 0x0002
+
+    await gtw_08.async_update_settings()
+
+    assert unit.read_events
+    assert all(128 <= event.address <= 200 for event in unit.read_events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [0, -1])
+async def test_read_too_few_registers(gtw_08: GTW08, count: int):
+    """Test that the api doesn't allow reading less than one register."""
+
+    with pytest.raises(ValueError, match=f"Illegal count {count}: must be between 1 and"):
+        await gtw_08.async_read_registers(address=130, count=count)
+
+
+@pytest.mark.asyncio
+async def test_read_registers_default_format(gtw_08: GTW08):
+    """Test that a single register is read as an unsigned short by default."""
+
+    assert await gtw_08.async_read_registers(address=130) == (
+        struct.unpack("=H", (0x0101).to_bytes(2, "big"))[0],
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_registers_invalid_format(gtw_08: GTW08):
+    """Test that an illegal struct format is reported as a `struct.error`."""
+
+    with pytest.raises(struct.error):
+        await gtw_08.async_read_registers(address=130, count=1, struct_format=">HH")
