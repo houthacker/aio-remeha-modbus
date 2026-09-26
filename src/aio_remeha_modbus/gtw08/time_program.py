@@ -173,7 +173,7 @@ class TimeProgramField(RegisterField[list[Timeslot]]):
 
         no_of_slots: int = int.from_bytes(schedule_bytes[0:1])
 
-        def _generate_timeslots():
+        def _decode_timeslots():
             for slot_index in range(
                 1, no_of_slots * REMEHA_TIME_PROGRAM_SLOT_SIZE, REMEHA_TIME_PROGRAM_SLOT_SIZE
             ):
@@ -184,7 +184,7 @@ class TimeProgramField(RegisterField[list[Timeslot]]):
                 yield Timeslot.decode(encoded_time_slot=slot_bytes)
 
         try:
-            return [time_slot for time_slot in list(_generate_timeslots()) if time_slot is not None]
+            return [time_slot for time_slot in list(_decode_timeslots()) if time_slot is not None]
         except ValueError as ex:
             raise InvalidZoneSchedule(translation_key="invalid_time_program") from ex
 
