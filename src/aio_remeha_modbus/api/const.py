@@ -25,6 +25,9 @@ REMEHA_TIME_PROGRAM_RESERVED_REGISTERS: Final[int] = 70
 REMEHA_TIME_PROGRAM_BYTE_SIZE: Final[int] = 20
 """The byte size of a single encoded `ZoneSchedule`."""
 
+REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS: Final[int] = 10
+"""The register size of a single `DaySchedule`."""
+
 REMEHA_TIME_PROGRAM_SLOT_SIZE: Final[int] = 3
 """The byte size of a single encoded `Timeslot`."""
 
@@ -101,6 +104,23 @@ class ClimateZoneScheduleId(IntEnum):
     SCHEDULE_2 = 1
     SCHEDULE_3 = 2
     SCHEDULE_4 = 3
+
+    def is_cooling_schedule(self) -> bool:
+        """Return whether this id refers to a cooling schedule."""
+
+        return self is ClimateZoneScheduleId.SCHEDULE_4
+
+
+class SeasonalMode(IntEnum):
+    """Defines the current seasonal mode of the appliance."""
+
+    WINTER = 0
+
+    WINTER_FROST_PROTECTION = 1
+
+    SUMMER_NEUTRAL_BAND = 2
+
+    SUMMER = 3
 
 
 # DHW auto scheduling

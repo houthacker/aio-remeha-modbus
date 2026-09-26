@@ -1,7 +1,7 @@
 """Tests for ClimateZone."""
 
 from datetime import datetime, time
-from typing import Final, cast
+from typing import Final
 
 import pytest
 from dateutil import tz
@@ -21,7 +21,6 @@ from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
     TimeslotSetpointType,
-    ZoneSchedule,
 )
 from aio_remeha_modbus.api.system_discovery_table import (
     DeviceBoard,
@@ -101,6 +100,7 @@ async def test_invalid_zone_schedule(gtw_08: GTW08):
     update_raw_data(
         gtw_08,
         [
+            (688 + REMEHA_ZONE_RESERVED_REGISTERS, 0x01),  # select schedule_1
             (690 + REMEHA_ZONE_RESERVED_REGISTERS, 0x1515),  # garbage
         ],
     )
@@ -198,7 +198,7 @@ async def test_climate_zone_ch_get_current_heating_setpoint(gtw_08: GTW08):
 
     assert not zone.is_domestic_hot_water()
     assert zone.is_central_heating()
-    assert not zone.appliance_requires_cooling
+    assert not zone.appliance_requires_cooling()
 
     assert zone.mode == ClimateZoneMode.SCHEDULING
     assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_1
@@ -238,25 +238,11 @@ async def test_write_ch_zone_cooling_schedule_is_supported(gtw_08: GTW08):
     assert zone.current_schedule is not None
     assert zone.current_schedule[Weekday.MONDAY] is not None
 
-    # Enforce a cooling schedule.
-    for schedule in [s for s in zone.current_schedule.values() if s is not None]:
-        schedule.id = ClimateZoneScheduleId.SCHEDULE_4
-
     # Can set the current schedule
     await zone.async_set_current_schedule(
-        cast(
-            dict[Weekday, ZoneSchedule],
-            {Weekday.MONDAY: zone.current_schedule[Weekday.MONDAY]}
-            | {
-                day: zone.current_schedule[Weekday.MONDAY]
-                for day in Weekday
-                if day is not Weekday.MONDAY
-            },
-        )
+        schedule_id=ClimateZoneScheduleId.SCHEDULE_4,
+        schedule=zone.current_schedule,
     )
-
-    # Can write a single schedule
-    await zone.async_set_single_schedule(cast(ZoneSchedule, zone.current_schedule[Weekday.MONDAY]))
 
 
 @pytest.mark.asyncio
@@ -276,15 +262,7 @@ async def test_write_ch_zone_heating_schedule_not_supported(gtw_08: GTW08):
         RemehaApiError, check=lambda e: e.translation_key == "schedule_write_not_supported"
     ):
         await zone.async_set_current_schedule(
-            cast(dict[Weekday, ZoneSchedule], zone.current_schedule)
-        )
-
-    # Cannot write a single schedule
-    with pytest.raises(
-        RemehaApiError, check=lambda e: e.translation_key == "schedule_write_not_supported"
-    ):
-        await zone.async_set_single_schedule(
-            cast(ZoneSchedule, zone.current_schedule[Weekday.MONDAY])
+            schedule_id=ClimateZoneScheduleId.SCHEDULE_1, schedule=zone.current_schedule
         )
 
 
@@ -501,48 +479,44 @@ async def test_climate_zone_end_change_mode_time(gtw_08: GTW08):
 async def test_write_zone_schedule(gtw_08: GTW08):
     """Test that a time program can be written to the modbus device."""
 
-    expected_schedule = ZoneSchedule(
-        id=ClimateZoneScheduleId.SCHEDULE_2,
-        zone_id=2,
-        day=Weekday.FRIDAY,
-        time_slots=[
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("00:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("10:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("13:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("18:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.DHW,
-                switch_time=time.fromisoformat("21:00"),
-            ),
-        ],
-    )
+    time_slots = [
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.DHW,
+            switch_time=time.fromisoformat("00:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.COMFORT,
+            activity=TimeslotActivity.DHW,
+            switch_time=time.fromisoformat("10:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.DHW,
+            switch_time=time.fromisoformat("13:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.COMFORT,
+            activity=TimeslotActivity.DHW,
+            switch_time=time.fromisoformat("18:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.DHW,
+            switch_time=time.fromisoformat("21:00"),
+        ),
+    ]
 
-    # Retrieve schedule from modbus, must be None.
+    # Retrieve schedule from modbus, must not be None.
     current_schedule = gtw_08.zones[1].current_schedule
     assert current_schedule is not None
     actual_schedule = current_schedule[Weekday.FRIDAY]
     assert actual_schedule is not None
-    assert actual_schedule != expected_schedule
+    assert actual_schedule != time_slots
 
-    await gtw_08.zones[1].async_set_single_schedule(expected_schedule)
-    await gtw_08.zones[1].async_set_selected_schedule(expected_schedule.id)
+    await gtw_08.zones[1].async_set_current_schedule(
+        ClimateZoneScheduleId.SCHEDULE_2, dict.fromkeys(Weekday, time_slots)
+    )
     await gtw_08.async_update()
 
     # Read it back and check if it was successful.
@@ -550,49 +524,50 @@ async def test_write_zone_schedule(gtw_08: GTW08):
     assert current_schedule is not None
     actual_schedule = current_schedule[Weekday.FRIDAY]
 
-    assert actual_schedule == expected_schedule
+    assert actual_schedule == time_slots
 
 
 @pytest.mark.asyncio
 async def test_write_cooling_schedule(gtw_08: GTW08):
     """Test that a cooling schedule can be written to the modbus device."""
 
-    expected_schedule = ZoneSchedule(
-        id=ClimateZoneScheduleId.SCHEDULE_4,
-        zone_id=1,
-        day=Weekday.FRIDAY,
-        time_slots=[
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time.fromisoformat("00:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time.fromisoformat("10:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time.fromisoformat("13:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time.fromisoformat("18:00"),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time.fromisoformat("21:00"),
-            ),
-        ],
-    )
+    expected_time_slots = [
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time.fromisoformat("00:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.COMFORT,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time.fromisoformat("10:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time.fromisoformat("13:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.COMFORT,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time.fromisoformat("18:00"),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time.fromisoformat("21:00"),
+        ),
+    ]
 
     await gtw_08.zones[0].async_set_mode(ClimateZoneMode.SCHEDULING)
-    await gtw_08.zones[0].async_set_selected_schedule(expected_schedule.id)
-    await gtw_08.zones[0].async_set_single_schedule(expected_schedule)
+    await gtw_08.zones[0].async_set_selected_schedule(ClimateZoneScheduleId.SCHEDULE_4)
+
+    # Write the actual schedule
+    current_schedule = gtw_08.zones[0].current_schedule
+    current_schedule[Weekday.FRIDAY] = expected_time_slots
+    await gtw_08.zones[0].async_set_current_schedule(
+        ClimateZoneScheduleId.SCHEDULE_4, current_schedule
+    )
 
     # TODO validate that the state is equal before and after the write.
     await gtw_08.async_update()
@@ -602,6 +577,6 @@ async def test_write_cooling_schedule(gtw_08: GTW08):
     assert current_schedule is not None
     actual_schedule = current_schedule[Weekday.FRIDAY]
 
-    assert actual_schedule == expected_schedule
+    assert actual_schedule == expected_time_slots
     assert gtw_08.zones[0].mode is ClimateZoneMode.SCHEDULING
-    assert gtw_08.zones[0].selected_schedule is expected_schedule.id
+    assert gtw_08.zones[0].selected_schedule is ClimateZoneScheduleId.SCHEDULE_4

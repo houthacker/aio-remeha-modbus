@@ -5,16 +5,13 @@ from datetime import tzinfo
 from typing import Any
 
 from modbus_connection import ModbusExceptionError, ModbusUnit
-from modbus_connection.model import Component, Device, ManualComponent
+from modbus_connection.model import ComponentGroup, Device, ManualComponent, UpdateReport
 
 from aio_remeha_modbus.api.appliance import (
     Appliance,
 )
 from aio_remeha_modbus.api.climate_zone import (
     ClimateZone,
-    ZoneSchedule,
-    _DaySchedule,
-    _get_day_schedule_offset,
 )
 from aio_remeha_modbus.api.const import (
     REMEHA_MAX_SPAN,
@@ -23,6 +20,11 @@ from aio_remeha_modbus.api.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
 from aio_remeha_modbus.api.system_discovery_table import SystemDiscoveryTable
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
+
+# Attribute names of syb-systems each update method reads.
+READINGS = ("main_control_monitoring", "appliance", "_zones")
+SETTINGS = ("discovery_table",)
+ALL = (*READINGS, *SETTINGS)
 
 
 class GTW08(Device):
@@ -50,6 +52,8 @@ class GTW08(Device):
 
         """
 
+        super().__init__(unit)
+
         unit.set_message_spacing(message_spacing_seconds)
         unit.require_timeout(request_timeout)
 
@@ -60,7 +64,9 @@ class GTW08(Device):
         self.discovery_table = SystemDiscoveryTable(unit)
         self.main_control_monitoring = MainControlMonitoring(unit)
         self.appliance = Appliance(unit)
+
         self.zones: list[ClimateZone] = []
+        self._zones: ComponentGroup | None = None
 
     @staticmethod
     async def async_health_check(unit: ModbusUnit) -> None:
@@ -87,22 +93,32 @@ class GTW08(Device):
         if self.discovery_table.number_of_zones is None:
             raise RemehaApiError(translation_key="api_setup_number_of_zones")
 
+        self.zones = []
         for idx in range(self.discovery_table.number_of_zones):
             climate_zone = ClimateZone(
                 self._unit,
                 sequence_id=idx + 1,
                 time_zone=self._time_zone,
-                appliance_requires_cooling=self.appliance.is_cooling_required(),
+                appliance_requires_cooling=self.appliance.is_cooling_required,
             )
 
             await climate_zone.async_update()
             self.zones.append(climate_zone)
 
-    async def _async_update(self):
+        self._zones = ComponentGroup(
+            self._unit,
+            list(self.zones),
+        )
 
-        component: Component
-        for component in [self.main_control_monitoring, self.appliance, *self.zones]:
-            await component.async_update()
+    async def async_update_readings(self) -> UpdateReport:
+        """Refresh the GTW08 measurements."""
+
+        return await self.async_poll(READINGS)
+
+    async def async_update_settings(self) -> UpdateReport:
+        """Refresh the GTW08 settings."""
+
+        return await self.async_poll(SETTINGS)
 
     @property
     def name(self) -> str:
@@ -135,20 +151,8 @@ class GTW08(Device):
         registers = await self._unit.read_holding_registers(address, count=count)
         return struct.unpack(struct_format, decode_bytes(registers))
 
-    async def async_overwrite_zone_schedule(self, schedule: ZoneSchedule) -> None:
-        """Overwrite an existing `ZoneSchedule` with the given one."""
-
-        component = _DaySchedule(
-            unit=self._unit,
-            index=schedule.day + 1,
-            base_offset=_get_day_schedule_offset(zone_id=schedule.zone_id, schedule_id=schedule.id),
-        )
-        await component.async_set_schedule(schedule)
-
-    async def async_update(self):
+    async def async_update(self) -> UpdateReport:
         """Refresh all components."""
 
-        if not self.zones:
-            await self._async_setup()
-        else:
-            await self._async_update()
+        report = await self.async_poll(SETTINGS)
+        return await self.async_poll(READINGS, report)

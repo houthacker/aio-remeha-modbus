@@ -4,7 +4,7 @@ from datetime import date, time
 
 import pytest
 
-from aio_remeha_modbus.api.api import GTW08
+from aio_remeha_modbus.api import GTW08
 from aio_remeha_modbus.api.const import (
     BoilerConfiguration,
     BoilerEnergyLabel,

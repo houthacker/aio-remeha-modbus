@@ -12,7 +12,7 @@ from modbus_connection.cli_helper import (
     print_component,
 )
 
-from aio_remeha_modbus.api.api import GTW08
+from aio_remeha_modbus.api import GTW08
 from aio_remeha_modbus.api.appliance import Appliance
 from aio_remeha_modbus.api.climate_zone import ClimateZone
 from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
@@ -111,7 +111,7 @@ async def main() -> int:  # noqa: D103
                     unit=unit,
                     sequence_id=query_zone,
                     time_zone=gettz(args.timezone),
-                    appliance_requires_cooling=appliance.is_cooling_required(),
+                    appliance_requires_cooling=appliance.is_cooling_required,
                 )
                 await zone.async_update()
                 print_component(zone, title=f"Climate Zone {query_zone}")

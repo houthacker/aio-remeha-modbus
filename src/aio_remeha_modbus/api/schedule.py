@@ -4,7 +4,6 @@ import datetime
 import logging
 import math
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Final, Self, cast
 
 from dateutil import parser
@@ -28,7 +27,7 @@ from aio_remeha_modbus.api.const import (
 )
 from aio_remeha_modbus.api.const import REMEHA_TIME_PROGRAM_SLOT_SIZE as SLOT_SIZE
 from aio_remeha_modbus.api.errors import AutoSchedulingError
-from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+from aio_remeha_modbus.helpers.gtw08 import Timeslot, TimeslotActivity, TimeslotSetpointType
 from aio_remeha_modbus.helpers.iterators import consecutive_groups
 
 if TYPE_CHECKING:
@@ -95,100 +94,6 @@ class WeatherForecast:
 
     forecasts: list[HourlyForecast]
     """A list containing the hourly forecasts for the next 24 hours."""
-
-
-class TimeslotActivity(Enum):
-    """The type of activity that must run during the containing TimeSlot."""
-
-    HEAT_COOL = int("c8", 16)
-    DHW = int("00", 16)
-
-
-class TimeslotSetpointType(Enum):
-    """The setpoint that must be reached during the containing TimeSlot.
-
-    The names used here are the default names as shown in the Remeha Home app. In the app, these names
-    can be changed.
-    """
-
-    ECO = 0
-    """Reduced setpoint. For `TimeslotActivity.HEAT_COOL` this is named 'Sleeping' in the Remeha Home app. """
-
-    COMFORT = int("10", 16)
-    """Comfort setpoint. For `TimeslotActivity.HEAT_COOL` this is named 'At home' in the Remeha Home app."""
-
-    AWAY = int("20", 16)
-    """Setpoint in 'away' mode."""
-
-    MORNING = int("30", 16)
-    """Setpoint in 'morning' mode."""
-
-    EVENING = int("40", 16)
-    """Setpoint in 'evening' mode."""
-
-
-@dataclass(frozen=True)
-class Timeslot:
-    """A zone schedule time slot."""
-
-    setpoint_type: TimeslotSetpointType
-    """The type of setpoint for this time slot."""
-
-    activity: TimeslotActivity
-    """The type of activity for this time slot."""
-
-    switch_time: datetime.time
-    """The start time of this time slot."""
-
-    def encode(self) -> bytes:
-        """Encode this time slot into a `bytes` object."""
-
-        time_steps: int = SteppedTimeOfDay.to_steps(self.switch_time)
-
-        return (
-            int(self.activity.value).to_bytes()
-            + int(self.setpoint_type.value).to_bytes()
-            + time_steps.to_bytes()
-        )
-
-    def __lt__(self, other) -> bool:
-        """Compare this `Timeslot` to another."""
-        if isinstance(other, Timeslot):
-            o: Timeslot = cast(Timeslot, other)
-            return self.switch_time < o.switch_time
-
-        return False
-
-    def __str__(self):
-        """Return a human-readable representation of this time slot."""
-        return f"Timeslot(setpoint_type={self.setpoint_type.name}, activity={self.activity.name}, switch_time={self.switch_time})"
-
-    @classmethod
-    def decode(cls, encoded_time_slot: bytes) -> Self:
-        """Decode a `bytes` object intoa a `Timeslot`.
-
-        Args:
-            encoded_time_slot (bytes): The encoded time slot. Must be 3 bytes.
-
-        Raises:
-            `ValueError`: If `encoded_time_slot` is not exactly 3 bytes.
-
-        """
-        # slot_bytes must be exactly 3 bytes.
-        if len(encoded_time_slot) != SLOT_SIZE:
-            raise ValueError(
-                f"Cannot decode time program: require time slot of {SLOT_SIZE} bytes but got {len(encoded_time_slot)}."
-            )
-
-        time_steps = int.from_bytes(encoded_time_slot[2:3])
-        setpoint_type = TimeslotSetpointType(int.from_bytes(encoded_time_slot[1:2]))
-        activity = TimeslotActivity(int.from_bytes(encoded_time_slot[:1]))
-
-        return cls(
-            activity=activity,
-            setpoint_type=setpoint_type,
-            switch_time=SteppedTimeOfDay.from_steps(time_steps),
-        )
 
 
 @dataclass
@@ -573,63 +478,3 @@ class ZoneSchedule:
     def __str__(self):
         """Return a human-readable representation of this schedule."""
         return f"ZoneSchedule(id={self.id}, zone_id={self.zone_id}, day={self.day.name}, time_slots={self.time_slots})"
-
-
-def get_current_timeslot(
-    schedule: dict[Weekday, ZoneSchedule | None] | None,
-    time_zone: datetime.tzinfo | None,
-) -> Timeslot | None:
-    """Retrieve the current schedule time slot.
-
-    Args:
-        schedule (dict[Weekday, ZoneSchedule]): The selected schedule
-        time_zone (datetime.tzinfo): The appliance time zone
-
-    Returns:
-        The current schedule time slot, or `None` if `schedule` is `None`.
-
-    """
-
-    if schedule is None:
-        return None
-
-    now: datetime.datetime = datetime.datetime.now(time_zone)
-    day_schedule: ZoneSchedule | None = schedule.get(Weekday(now.weekday()), None)
-
-    return (
-        next(
-            reversed(
-                [
-                    time_slot
-                    for time_slot in day_schedule.time_slots
-                    if time_slot.switch_time.hour <= now.hour
-                ]
-            ),
-            None,
-        )
-        if day_schedule
-        else None
-    )
-
-
-def is_cooling_schedule(
-    schedule: dict[Weekday, ZoneSchedule | None] | None, time_zone: datetime.tzinfo | None
-) -> bool:
-    """Return whether the given schedule is a cooling schedule.
-
-    Args:
-        schedule: The weekly schedule to test.
-        time_zone (datetime.tzinfo): The appliance time zone
-
-    Returns:
-        `True` if the schedule for the current day is a cooling schedule, `False` otherwise.
-
-    """
-
-    if schedule is None:
-        return False
-
-    now: datetime.datetime = datetime.datetime.now(time_zone)
-    day_schedule = schedule.get(Weekday(now.weekday()))
-
-    return day_schedule.id == ClimateZoneScheduleId.SCHEDULE_4 if day_schedule else False

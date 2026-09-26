@@ -24,7 +24,6 @@ from aio_remeha_modbus.api.schedule import (
     Timeslot,
     TimeslotActivity,
     TimeslotSetpointType,
-    ZoneSchedule,
 )
 from aio_remeha_modbus.helpers.fields import decode_bytes
 
@@ -169,41 +168,36 @@ async def test_overwrite_zone_schdule(gtw_08: GTW08):
     """Test that the API can overwrite a single ZoneSchedule."""
 
     expected: bytes = bytes.fromhex("05 c81024 c8302a c82036 c84060 c80087 0000 0000")
-    schedule: ZoneSchedule = ZoneSchedule(
-        id=ClimateZoneScheduleId.SCHEDULE_2,
-        zone_id=1,
-        day=Weekday.MONDAY,
-        time_slots=[
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.COMFORT,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time(6, 0, 0),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.MORNING,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time(7, 0, 0),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.AWAY,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time(9, 0, 0),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.EVENING,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time(16, 0, 0),
-            ),
-            Timeslot(
-                setpoint_type=TimeslotSetpointType.ECO,
-                activity=TimeslotActivity.HEAT_COOL,
-                switch_time=time(22, 30, 0),
-            ),
-        ],
-    )
+    time_slots = [
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.COMFORT,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time(6, 0, 0),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.MORNING,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time(7, 0, 0),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.AWAY,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time(9, 0, 0),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.EVENING,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time(16, 0, 0),
+        ),
+        Timeslot(
+            setpoint_type=TimeslotSetpointType.ECO,
+            activity=TimeslotActivity.HEAT_COOL,
+            switch_time=time(22, 30, 0),
+        ),
+    ]
 
     registers: list[int] = list(
-        await gtw_08.async_read_registers(759, count=10, struct_format=">HHHHHHHHHH")
+        await gtw_08.async_read_registers(899, count=10, struct_format=">HHHHHHHHHH")
     )
     encoded_bytes = decode_bytes(registers)
 
@@ -211,8 +205,13 @@ async def test_overwrite_zone_schdule(gtw_08: GTW08):
     assert encoded_bytes != expected
 
     # Overwrite the new schedule
-    await gtw_08.async_overwrite_zone_schedule(schedule)
+    # TODO await gtw_08.async_overwrite_zone_schedule(schedule)
+    current_schedule = gtw_08.zones[0].current_schedule
+    current_schedule[Weekday.MONDAY] = time_slots
+    await gtw_08.zones[0].async_set_current_schedule(
+        ClimateZoneScheduleId.SCHEDULE_4, current_schedule
+    )
 
     # Re-read the registers and verify
-    registers = list(await gtw_08.async_read_registers(759, count=10, struct_format=">HHHHHHHHHH"))
+    registers = list(await gtw_08.async_read_registers(899, count=10, struct_format=">HHHHHHHHHH"))
     assert decode_bytes(registers) == expected

@@ -5,7 +5,7 @@ from enum import IntEnum
 
 from modbus_connection.model import boolean, enum, uint32
 
-from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN
+from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN, SeasonalMode
 from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
 
@@ -41,18 +41,6 @@ class CoolingType(IntEnum):
     This type of cooling is used by geothermal and water-source
     heat pumps.
     """
-
-
-class SeasonalMode(IntEnum):
-    """Defines the current seasonal mode of the appliance."""
-
-    WINTER = 0
-
-    WINTER_FROST_PROTECTION = 1
-
-    SUMMER_NEUTRAL_BAND = 2
-
-    SUMMER = 3
 
 
 class ApplianceStatus(IntEnum):

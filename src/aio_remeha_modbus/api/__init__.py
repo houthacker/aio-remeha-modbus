@@ -4,6 +4,6 @@ __all__ = [
     "GTW08",
 ]
 
-from .api import (
+from .gtw08 import (
     GTW08,
 )

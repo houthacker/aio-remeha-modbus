@@ -4,13 +4,14 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, tzinfo
 from enum import IntEnum
-from typing import Any, cast, override
+from typing import Any, cast
 
 from dateutil import relativedelta
 from modbus_connection import ModbusUnit
-from modbus_connection.model import boolean, enum, string
+from modbus_connection.model import boolean, enum, repeating_group, string
 
 from aio_remeha_modbus.api.const import (
+    REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
     REMEHA_MAX_SPAN,
     REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
     REMEHA_ZONE_RESERVED_REGISTERS,
@@ -18,17 +19,15 @@ from aio_remeha_modbus.api.const import (
     Limits,
     Weekday,
 )
-from aio_remeha_modbus.api.errors import InvalidZoneSchedule, RemehaApiError
+from aio_remeha_modbus.api.errors import RemehaApiError
 from aio_remeha_modbus.api.model import RemehaComponent
-from aio_remeha_modbus.api.schedule import (
+from aio_remeha_modbus.helpers.fields import int16, nullable_binary, time_slots, uint8, uint16
+from aio_remeha_modbus.helpers.gtw08 import (
+    TimeOfDay,
     Timeslot,
     TimeslotSetpointType,
-    ZoneSchedule,
     get_current_timeslot,
-    is_cooling_schedule,
 )
-from aio_remeha_modbus.helpers.fields import int16, nullable_binary, uint8, uint16
-from aio_remeha_modbus.helpers.gtw08 import TimeOfDay
 from aio_remeha_modbus.helpers.validation import in_range
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,7 +143,7 @@ def _map_selected_schedule_for_write(
     )
 
 
-def _get_day_schedule_offset(
+def _time_program_start_address(
     zone_id: int = 1, schedule_id: ClimateZoneScheduleId = ClimateZoneScheduleId.SCHEDULE_1
 ) -> int:
     return (
@@ -182,45 +181,28 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
     ] or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
 
 
-class _DaySchedule(RemehaComponent):
-    """A component representing the raw bytes of a zone schedule for a single day."""
+class DaySchedule(RemehaComponent):
+    """A component representing the slots in a time program for a single day."""
 
     max_span = REMEHA_MAX_SPAN
 
-    id: ClimateZoneScheduleId
+    slots = time_slots(address=689, writable=True, stride=0)
+    """The time slots for the related day."""
 
-    zone_id: int
+    async def async_set_time_slots(self, time_slots: list[Timeslot]) -> None:
+        """Write the given time slots."""
 
-    _data = nullable_binary(address=689, count=10, writable=True, stride=10)
-    """The binary schedule data."""
+        await self.write("slots", time_slots)
 
-    def __init__(
-        self,
-        unit: ModbusUnit,
-        index: int = 1,
-        base_offset: int = 0,
-        id: ClimateZoneScheduleId = ClimateZoneScheduleId.SCHEDULE_1,
-        zone_id: int = 1,
-    ):
-        super().__init__(unit=unit, index=index, base_offset=base_offset)
-        self.id = id
-        self.zone_id = zone_id
 
-    def schedule(self) -> ZoneSchedule | None:
-        """Decode the zone schedule bytes into a ZoneSchedule."""
+class TimeProgram(RemehaComponent):
+    """A components representing the schedules of a single time program."""
 
-        if self._data is None:
-            return None
+    max_span = REMEHA_MAX_SPAN
 
-        day = Weekday(self._index - 1)
-        return ZoneSchedule.decode(
-            id=self.id, zone_id=self.zone_id, day=day, encoded_schedule=self._data
-        )
-
-    async def async_set_schedule(self, schedule: ZoneSchedule) -> None:
-        """Write the given schedule."""
-
-        await self.write("_data", schedule.encode())
+    day_schedules = repeating_group(
+        len(Weekday), DaySchedule, stride=REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS
+    )
 
 
 class ClimateZone(RemehaComponent):
@@ -310,10 +292,14 @@ class ClimateZone(RemehaComponent):
     _selected_schedule = enum(
         address=688, enum_type=ClimateZoneScheduleId, nan=0xFF, writable=_writable_schedule_id()
     )
-    """The currently selected schedule.
+    """The currently selected schedule id.
 
     Although this property is optional, it needn't be `None` if `mode != ClimateZoneMode.SCHEDULING`.
     """
+
+    available_schedules = repeating_group(
+        4, TimeProgram, stride=REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
+    )
 
     _temporary_room_setpoint_end_time = nullable_binary(address=978, count=3, writable=True)
     """End time of temporary room setpoint override"""
@@ -342,10 +328,8 @@ class ClimateZone(RemehaComponent):
     time_zone: tzinfo | None
     """The time zone of the related appliance"""
 
-    appliance_requires_cooling: bool = False
+    appliance_requires_cooling: Callable[[], bool]
     """Whether the related appliance requires cooling"""
-
-    _current_schedule: dict[Weekday, ZoneSchedule | None] | None = None
 
     def __init__(
         self,
@@ -353,7 +337,7 @@ class ClimateZone(RemehaComponent):
         *,
         sequence_id: int = 1,
         time_zone: tzinfo | None = None,
-        appliance_requires_cooling: bool = False,
+        appliance_requires_cooling: Callable[[], bool] = lambda: False,
     ) -> None:
         """Create a new ClimateZone component."""
 
@@ -364,49 +348,6 @@ class ClimateZone(RemehaComponent):
         self.id = sequence_id
         self.time_zone = time_zone
         self.appliance_requires_cooling = appliance_requires_cooling
-
-    async def _async_update_schedule(self) -> None:
-        if self.mode is None or self.function is None:
-            self._current_schedule = None
-            return
-
-        selected_schedule = self.selected_schedule
-        if selected_schedule is None:
-            self._current_schedule = None
-            return
-
-        schedule: dict[Weekday, ZoneSchedule | None] = dict.fromkeys(Weekday)
-        for day in Weekday:
-            day_schedule = _DaySchedule(
-                self._unit,
-                index=day + 1,
-                base_offset=_get_day_schedule_offset(
-                    zone_id=self.id, schedule_id=selected_schedule
-                ),
-                id=selected_schedule,
-                zone_id=self.id,
-            )
-            await day_schedule.async_update()
-
-            schedule[day] = day_schedule.schedule()
-
-        self._current_schedule = schedule
-
-    @override
-    async def async_update(self, *, notify: bool = True) -> None:
-        await super().async_update(notify=False)
-
-        try:
-            await self._async_update_schedule()
-        except ValueError as e:
-            raise InvalidZoneSchedule(
-                zone=self.id,
-                schedule_id=cast(ClimateZoneScheduleId, self.selected_schedule),
-                is_dhw=self.is_domestic_hot_water(),
-            ) from e
-
-        if notify:
-            self.notify()
 
     @property
     def selected_schedule(self) -> ClimateZoneScheduleId | None:
@@ -424,7 +365,7 @@ class ClimateZone(RemehaComponent):
             _map_selected_schedule_for_read(
                 zone_mode=self.mode,
                 zone_function=self.function,
-                appliance_requires_cooling=self.appliance_requires_cooling,
+                appliance_requires_cooling=self.appliance_requires_cooling(),
                 selected_schedule=self._selected_schedule,
             )
             if self._selected_schedule is not None
@@ -434,13 +375,19 @@ class ClimateZone(RemehaComponent):
         )
 
     @property
-    def current_schedule(self) -> dict[Weekday, ZoneSchedule | None] | None:
-        """The current zone schedule for all week days.
+    def current_schedule(self) -> dict[Weekday, list[Timeslot] | None]:
+        """Return the selected schedule.
 
-        The current schedule is `None` if no schedule is selected.
+        If no schedule was selected, this method returns the dict with all
+        time slots set to `None`.
         """
 
-        return self._current_schedule
+        selected = self.selected_schedule
+        if selected is None:
+            return dict.fromkeys(Weekday)
+
+        time_program = self.available_schedules[selected]
+        return {day: time_program.day_schedules[day].slots for day in Weekday}
 
     @property
     def temporary_room_setpoint_end_time(self) -> datetime | None:
@@ -508,7 +455,13 @@ class ClimateZone(RemehaComponent):
             )
             return None
 
-        if is_cooling_schedule(schedule, self.time_zone):
+        if self.selected_schedule is None:
+            _LOGGER.warning(
+                "Cannot determine current CH setpoint because it's in scheduling mode but no schedule has been selected."
+            )
+            return None
+
+        if self.selected_schedule.is_cooling_schedule():
             return self._get_cooling_scheduling_setpoint(current_timeslot.setpoint_type)
 
         return self._get_heating_scheduling_setpoint(current_timeslot.setpoint_type)
@@ -785,51 +738,19 @@ class ClimateZone(RemehaComponent):
             ),
         )
 
-    async def async_set_single_schedule(self, schedule: ZoneSchedule):
-        """Write a single schedule.
-
-        The schedule written to is `schedule.id`.
-
-        **Note**
-        Writing a single schedule does _not_ select it as the current schedule.
-
-        Raises:
-            RemehaApiError(`translation_key="zone_ownership_error"`): If the schedule does nog belong
-            to this zone.
-
-            RemehaApiError(`translation_key="schedule_write_not_supported"`): If the schedule is a CH heating schedule
-
-        """
-
-        if schedule.zone_id != self.id:
-            raise RemehaApiError("zone_ownership_error")
-
-        if self.is_domestic_hot_water() or schedule.id is ClimateZoneScheduleId.SCHEDULE_4:
-            _day_schedule = _DaySchedule(
-                unit=self.modbus_unit,
-                index=schedule.day + 1,
-                base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=schedule.id),
-                id=schedule.id,
-                zone_id=self.id,
-            )
-
-            await _day_schedule.async_set_schedule(schedule)
-        else:
-            raise RemehaApiError("schedule_write_not_supported")
-
-    async def async_set_current_schedule(self, schedule: dict[Weekday, ZoneSchedule]):
+    async def async_set_current_schedule(
+        self, schedule_id: ClimateZoneScheduleId, schedule: dict[Weekday, list[Timeslot] | None]
+    ):
         """Write a full schedule.
 
-        Setting the current schedule also updates `selected_schedule` to `schedule.id`.
+        Setting the current schedule also updates `selected_schedule` to `schedule_id`.
 
         Raises:
-            RemehaApiError(`translation_key="schedule_write_not_supported"`): If this zone is not a DHW zone.
+            RemehaApiError(`translation_key="schedule_write_not_supported"`):
+                If this zone is neither a DHW zone nor a cooling schedule (`schedule_4`).
 
-            RemehaApiError(`translation_key="zone_ownership_error"`): If any schedule does nog belong
-            to this zone.
-
-            RemehaApiError(`translation_key="invalid_schedule"`): If `schedule` doesn't contain all `Weekday`s
-            or if all `ZoneSchedule`s don't share the same `ClimateZoneScheduleId`.
+            RemehaApiError(`translation_key="invalid_schedule"`): If `schedule` doesn't contain
+                a value for each `Weekday`.
 
         """
 
@@ -837,34 +758,24 @@ class ClimateZone(RemehaComponent):
         if len(schedule) != len(Weekday):
             raise RemehaApiError("invalid_schedule")
 
-        # All schedules must belong to this zone.
-        if any(s.zone_id != self.id for s in schedule.values() if s is not None):
-            raise RemehaApiError("zone_ownership_error")
-
-        # Finally, all schedules must share the same `id`.
-        if len({s.id for s in schedule.values() if s is not None}) > 1:
-            raise RemehaApiError("invalid_schedule")
-
         # Writing a schedule is only supported for DHW schedules and CH cooling schedules
-        if (
-            self.is_domestic_hot_water()
-            or schedule[Weekday(0)].id is ClimateZoneScheduleId.SCHEDULE_4
-        ):
+        if self.is_domestic_hot_water() or schedule_id.is_cooling_schedule():
+            # Select the current schedule if required
+            if self.selected_schedule is not schedule_id:
+                await self.async_set_selected_schedule(schedule_id)
+
             # Sequentially write all schedules.
-            for s in schedule.values():
-                _day_schedule = _DaySchedule(
-                    unit=self.modbus_unit,
-                    index=s.day + 1,
-                    base_offset=_get_day_schedule_offset(zone_id=self.id, schedule_id=s.id),
-                    id=s.id,
-                    zone_id=self.id,
+            for day in Weekday:
+                time_program_start = _time_program_start_address(self.id, schedule_id)
+                day_schedule_start = (
+                    time_program_start + day * REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS
+                )
+                day_schedule = DaySchedule(
+                    unit=self._unit,
+                    base_offset=day_schedule_start,
                 )
 
-                await _day_schedule.async_set_schedule(s)
-
-            # Select the current schedule.
-            await self.async_set_selected_schedule(schedule[Weekday.MONDAY].id)
-            self._current_schedule = dict(schedule.items())
+                await day_schedule.async_set_time_slots(schedule[day] or [])
         else:
             raise RemehaApiError("schedule_write_not_supported")
 
