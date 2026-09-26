@@ -4,7 +4,7 @@ import datetime
 import logging
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final, Self, cast
+from typing import Any, Final, Self, cast
 
 from dateutil import parser
 
@@ -16,22 +16,16 @@ from aio_remeha_modbus.api.const import (
     MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL,
     PV_EFFICIENCY_TABLE,
     PV_MAX_TILT_DEGREES,
-    REMEHA_TIME_PROGRAM_BYTE_SIZE,
     WATER_SPECIFIC_HEAT_CAPACITY_KJ,
     BoilerConfiguration,
     BoilerEnergyLabel,
     ForecastField,
     PVSystem,
     UnitOfTemperature,
-    Weekday,
 )
-from aio_remeha_modbus.api.const import REMEHA_TIME_PROGRAM_SLOT_SIZE as SLOT_SIZE
 from aio_remeha_modbus.api.errors import AutoSchedulingError
-from aio_remeha_modbus.helpers.gtw08 import Timeslot, TimeslotActivity, TimeslotSetpointType
+from aio_remeha_modbus.api.time_program import Timeslot, TimeslotActivity, TimeslotSetpointType
 from aio_remeha_modbus.helpers.iterators import consecutive_groups
-
-if TYPE_CHECKING:
-    from aio_remeha_modbus.api.climate_zone import ClimateZone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,386 +90,217 @@ class WeatherForecast:
     """A list containing the hourly forecasts for the next 24 hours."""
 
 
-@dataclass
-class ZoneSchedule:
-    """Implementation of the Remeha Modbus scheduling format.
+def generate_dhw_day_schedule(
+    weather_forecast: WeatherForecast,
+    pv_system: PVSystem,
+    boiler_config: BoilerConfiguration,
+    calorifier_hysteresis: float,
+    appliance_seasonal_mode: SeasonalMode | None,
+) -> list[Timeslot]:
+    """Generate the schedule for the next day, based on the weather forecast.
 
-    The GTW-08 parameter list shows that a user can choose from 3 distinct heating schedules
-    for a given zone. For cooling, one schedule can be used. All schedules are divided in 7 day schedules,
-    one for each weekday.
+    Args:
+        weather_forecast (WeatherForecast): The weather forecast for the next 24 hours.
+        pv_system (PVSystem): The PV system configuration.
+        boiler_config (BoilerConfiguration): The DHW boiler configuration.
+        calorifier_hysteresis (float): The amount of degrees C the boiler can cool down
+            below the setpoint before heating restarts.
+        appliance_seasonal_mode (SeasonalMode): The current seasonal mode of the appliance.
 
-    ### Time program encoding
-    A time program is encoded in a binary string, and is 20 bytes (10 registers) in size.
-    It is encoded as follows:
+    Returns:
+        The generated `ZoneSchedule`.
 
-    | Byte index  |          Contents           | Data type |
-    |:-----------:|:----------------------------|:----------|
-    |    `0`      | Number of switches (max 6)  | `UINT8`   |
-    |    `1`      | Temperature 1               | `UINT16`  |
-    |    `3`      | Switch time 1               | `UINT8`   |
-    |    `4`      | Temperature 2               | `UINT16`  |
-    |    `6`      | Switch time 2               | `UINT8`   |
-    |    ...      |            ...              |   ...     |
-    |   `16`      | Temperature 6               | `UINT16`  |
-    |   `18`      | Switch time 6               | `UINT8`   |
-
-    #### Temperature encoding
-    The switch temperature is encoded into activities (heat/cool, dhw, dhw primary).
-    The setpoints of these activities are defined elsewhere. The activities are defined as follows:
-
-    | Name      | MSB     | LSB                     |
-    |:----------|:-------:|------------------------:|
-    | At home   | `0x10`  |    `0xc8` (heat/cool)   |
-    | Morning   | `0x30`  |    `0xc8` (heat/cool)   |
-    | Away      | `0x20`  |    `0xc8` (heat/cool)   |
-    | Evening   | `0x40`  |    `0xc8` (heat/cool)   |
-    | Sleeping  | `0x00`  |    `0xc8` (heat/cool)   |
-    | Eco       | `0x00`  |    `0x00` (DHW primary) |
-    | Comfort   | `0x10`  |    `0x00` (DHW primary) |
-
-
-    #### Switch time encoding
-    The switch time is encoded as a number, indicating the amount of 10-minute
-    steps from 00:00 local time. This means that a value of 10 stands for 01:40AM.
     """
+    _LOGGER.info("Generating ZoneSchedule for tomorrow...")
 
-    id: ClimateZoneScheduleId
-    """The one-based id of the time program."""
+    if not weather_forecast.forecasts:
+        raise AutoSchedulingError(translation_key="auto_schedule_no_forecasts")
 
-    zone_id: int
-    """The one-based id of the containing zone."""
-
-    day: Weekday
-    """The weekday of this program"""
-
-    time_slots: list[Timeslot]
-    """The defined time slots for this schedule."""
-
-    def encode(self) -> bytes:
-        """Encode this `ZoneSchedule` into `bytes`.
-
-        **Note** The resulting bytes do not encode `id`, `zone_id` and `day`. These attributes are used to
-        find the correct modbus register to put the schedule in.
-
-        """
-
-        time_slot_count: bytes = int(len(self.time_slots)).to_bytes()
-        not_padded_slots: bytes = b"".join(
-            [
-                time_slot_count,
-                *[t.encode() for t in self.time_slots],
-            ]
+    # We want to generate a planning for the next whole day, which must, to be useful,
+    # end no earlier than `AUTO_SCHEDULE_MINIMAL_END_HOUR`.
+    last_forecast: HourlyForecast = weather_forecast.forecasts[-1]
+    if last_forecast.start_time.hour < AUTO_SCHEDULE_MINIMAL_END_HOUR:
+        raise AutoSchedulingError(
+            translation_key="auto_schedule_forecast_not_enough_hours",
+            translation_placeholders={
+                "max_forecast_time": f"{last_forecast.start_time.hour}:00",
+                "min_required_end_time": f"{AUTO_SCHEDULE_MINIMAL_END_HOUR}:00",
+            },
         )
 
-        # Add padding null-bytes until length is REMEHA_TIME_PROGRAM_BYTE_SIZE bytes.
-        return b"".join(
-            [
-                not_padded_slots,
-                *[b"\00" for _ in range(REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots))],
-            ]
-        )
-
-    @classmethod
-    def decode(
-        cls,
-        id: ClimateZoneScheduleId,
-        zone_id: int,
-        day: Weekday,
-        encoded_schedule: bytes,
-    ) -> Self:
-        """Decode a `bytes` object containing the schedule into a `ZoneSchedule`.
-
-        Args:
-            id (int): The one-based id of the schedule.
-            zone_id (int): The one-based id of the `ClimateZone` containing the schedule.
-            day (Weekday): The day of the week this schedule is active in.
-            encoded_schedule (bytes): The binary data containing the encoded schedule. Must be exactly 20 bytes.
-
-        Raises:
-            `ValueError` if `encoded_schedule` is not exactly 20 bytes in size.
-
-        """
-        if len(encoded_schedule) != REMEHA_TIME_PROGRAM_BYTE_SIZE:
-            raise ValueError(
-                f"Cannot decode time program: require {REMEHA_TIME_PROGRAM_BYTE_SIZE} bytes but got {len(encoded_schedule)}."
-            )
-
-        no_of_slots: int = int.from_bytes(encoded_schedule[0:1])
-
-        def _generate_timeslots():
-            for slot_index in range(1, no_of_slots * SLOT_SIZE, SLOT_SIZE):
-                slot_bytes: bytes = encoded_schedule[slot_index : slot_index + SLOT_SIZE]
-
-                yield Timeslot.decode(encoded_time_slot=slot_bytes)
-
-        return cls(id=id, zone_id=zone_id, day=day, time_slots=list(_generate_timeslots()))
-
-    @classmethod
-    def create_default(
-        cls, id: ClimateZoneScheduleId, zone_id: int, day: Weekday, is_dhw: bool
-    ) -> Self:
-        """Create a default `ZoneSchedule`.
-
-        A default schedule puts the zone in ECO mode for that given day. Default schedules are
-        used to repair an issue where the zone schedule cannot be parsed although it has been
-        selected. This can mean that there are missing options in our implementation or that
-        the data has been corrupted in transit or on the GTW-08.
-
-        Args:
-            id (ClimateZoneScheduleId): The schedule id.
-            zone_id (int): The one-based id of the `ClimateZone` containing the schedule.
-            day (Weekday): The day of the week this schedule is active in.
-            is_dhw (bool): Whether this schedule is for a DHW zone.
-
-        Returns:
-            The zone schedule.
-
-
-        """
-
-        return cls(
-            id=id,
-            zone_id=zone_id,
-            day=day,
-            time_slots=[
-                Timeslot(
-                    setpoint_type=TimeslotSetpointType.ECO,
-                    activity=(TimeslotActivity.DHW if is_dhw else TimeslotActivity.HEAT_COOL),
-                    switch_time=datetime.time(hour=0),
-                )
-            ],
-        )
-
-    @classmethod
-    def generate(  # noqa: PLR0917
-        cls,
-        weather_forecast: WeatherForecast,
-        pv_system: PVSystem,
-        boiler_config: BoilerConfiguration,
-        boiler_zone: ClimateZone,
-        appliance_seasonal_mode: SeasonalMode | None,
-        schedule_id: ClimateZoneScheduleId,
-    ) -> Self:
-        """Generate a `ZoneSchedule` for the next day, based on the weather forecast.
-
-        Args:
-            weather_forecast (WeatherForecast): The weather forecast for the next 24 hours.
-            pv_system (PVSystem): The PV system configuration.
-            boiler_config (BoilerConfiguration): The DHW boiler configuration.
-            boiler_zone (ClimateZone): The DHW climate zone.
-            appliance_seasonal_mode (SeasonalMode): The current seasonal mode of the appliance.
-            schedule_id (ClimateZoneScheduleId): The id of the zone schedule to alter.
-
-        Returns:
-            The generated `ZoneSchedule`.
-
-        """
-        _LOGGER.info("Generating ZoneSchedule for tomorrow...")
-
-        if not weather_forecast.forecasts:
-            raise AutoSchedulingError(translation_key="auto_schedule_no_forecasts")
-
-        # We want to generate a planning for the next whole day, which must, to be useful,
-        # end no earlier than `AUTO_SCHEDULE_MINIMAL_END_HOUR`.
-        last_forecast: HourlyForecast = weather_forecast.forecasts[-1]
-        if last_forecast.start_time.hour < AUTO_SCHEDULE_MINIMAL_END_HOUR:
-            raise AutoSchedulingError(
-                translation_key="auto_schedule_forecast_not_enough_hours",
-                translation_placeholders={
-                    "max_forecast_time": f"{last_forecast.start_time.hour}:00",
-                    "min_required_end_time": f"{AUTO_SCHEDULE_MINIMAL_END_HOUR}:00",
-                },
-            )
-
-        # Calculate the amount of kWh required to heat to boiler to its setpoint, once
-        # it reaches the heating threshold, round to two decimals.
-        # This value is what we're looking for in the time blocks that we can use to schedule.
-        default_required_heating_kwh: float = (
-            math.ceil(
+    # Calculate the amount of kWh required to heat to boiler to its setpoint, once
+    # it reaches the heating threshold, round to two decimals.
+    # This value is what we're looking for in the time blocks that we can use to schedule.
+    default_required_heating_kwh: float = (
+        math.ceil(
+            (
                 (
-                    (
-                        cast(float, boiler_config.volume)
-                        * WATER_SPECIFIC_HEAT_CAPACITY_KJ
-                        * cast(float, boiler_zone.dhw_calorifier_hysteresis)
-                    )
-                    / 3600
+                    cast(float, boiler_config.volume)
+                    * WATER_SPECIFIC_HEAT_CAPACITY_KJ
+                    * cast(float, calorifier_hysteresis)
                 )
-                * 100
+                / 3600
             )
-            / 100
+            * 100
         )
+        / 100
+    )
+    _LOGGER.debug(
+        "Default kWh required to heat DHW boiler from setpoint - hysteresis = %.2f",
+        default_required_heating_kwh,
+    )
+
+    # Calculate the amount of kWh required to heat the boiler if it were to cool overnight,
+    # from now until tomorrow 08.00.
+    cooling_time_hours: int = int(
+        (
+            datetime.datetime.combine(
+                datetime.date.today() + datetime.timedelta(days=1),
+                datetime.time(hour=8),
+            )
+            - datetime.datetime.now()
+        ).total_seconds()
+        / 3600
+    )
+    heat_loss_rate: float = (
+        boiler_config.heat_loss_rate
+        if boiler_config.heat_loss_rate is not None
+        else _energy_label_to_heat_loss_rate(
+            label=cast(BoilerEnergyLabel, boiler_config.energy_label),
+            volume=cast(float, boiler_config.volume),
+        )
+    )
+
+    # Emit a warning if the required energy to heat it up again in the morning is too large.
+    required_heating_kwh_after_cooling: float = (heat_loss_rate * cooling_time_hours) / 1000
+    if required_heating_kwh_after_cooling > default_required_heating_kwh:
+        _LOGGER.warning(
+            "DHW boiler is likely going to heat up at night, outside of planning schedule."
+        )
+
+    # In the summer, only allow DHW heating in the morning and the afternoon.
+    # In the winter, only allow DHW heating when it's (possibly) warmest outside.
+    # If seasonal mode is unknown, allow heating all day.
+    #
+    # This prevents heating at night when there's no solar power, and also when
+    # central heating or cooling should have priority.
+    if appliance_seasonal_mode is None:
+        _LOGGER.warning(
+            "Your Remeha appliance does not specify a seasonal mode, allowing DHW boiler heating at all hours."
+        )
+
+    usable_hours = (
+        [range(24)]
+        if appliance_seasonal_mode is None
+        else (
+            [range(10, 23)]
+            if appliance_seasonal_mode in [SeasonalMode.SUMMER_NEUTRAL_BAND, SeasonalMode.SUMMER]
+            else [range(10, 17)]
+        )
+    )
+
+    # Calculate static PV system efficiency, based on orientation and tilt.
+    # The tilt is rounded up to the next smallest multiple of ten.
+    static_pv_efficiency: float = PV_EFFICIENCY_TABLE[pv_system.orientation][
+        min(math.ceil(cast(float, pv_system.tilt) / 10) * 10, PV_MAX_TILT_DEGREES)
+    ]
+    _LOGGER.debug("Static PV efficiency is %.2f", static_pv_efficiency)
+
+    # Calculate dynamic PV system efficiency, using efficiency decrease of its age.
+    pv_efficiency: float = static_pv_efficiency
+    if pv_system.annual_efficiency_decrease != 0.0:
+        system_runtime: datetime.timedelta = datetime.date.today() - cast(
+            datetime.date, pv_system.installation_date
+        )
+        decreased_percent: float = (system_runtime.days / 365) * cast(
+            float, pv_system.annual_efficiency_decrease
+        )
+        pv_efficiency *= (100 - decreased_percent) / 100
         _LOGGER.debug(
-            "Default kWh required to heat DHW boiler from setpoint - hysteresis = %.2f",
-            default_required_heating_kwh,
+            "PV efficiency is %.2f after applying annual efficiency decrease",
+            pv_efficiency,
         )
 
-        # Calculate the amount of kWh required to heat the boiler if it were to cool overnight,
-        # from now until tomorrow 08.00.
-        cooling_time_hours: int = int(
+    # This results in a forecasted yield in kWh for all of the 24 hrs
+    forecasted_kwh_yield: dict[int, int] = {
+        fc.start_time.hour: int(
             (
-                datetime.datetime.combine(
-                    datetime.date.today() + datetime.timedelta(days=1),
-                    datetime.time(hour=8),
-                )
-                - datetime.datetime.now()
-            ).total_seconds()
-            / 3600
+                (cast(int, fc.solar_irradiance) / MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL)
+                * pv_system.nominal_power
+                * pv_efficiency
+            )
+            / 1000.0
         )
-        heat_loss_rate: float = (
-            boiler_config.heat_loss_rate
-            if boiler_config.heat_loss_rate is not None
-            else _energy_label_to_heat_loss_rate(
-                label=cast(BoilerEnergyLabel, boiler_config.energy_label),
-                volume=cast(float, boiler_config.volume),
-            )
-        )
+        for fc in weather_forecast.forecasts
+        if fc.start_time.hour in [hour for r in usable_hours for hour in r]
+    }
 
-        # Emit a warning if the required energy to heat it up again in the morning is too large.
-        required_heating_kwh_after_cooling: float = (heat_loss_rate * cooling_time_hours) / 1000
-        if required_heating_kwh_after_cooling > default_required_heating_kwh:
-            _LOGGER.warning(
-                "DHW boiler is likely going to heat up at night, outside of planning schedule."
-            )
-
-        # In the summer, only allow DHW heating in the morning and the afternoon.
-        # In the winter, only allow DHW heating when it's (possibly) warmest outside.
-        # If seasonal mode is unknown, allow heating all day.
-        #
-        # This prevents heating at night when there's no solar power, and also when
-        # central heating or cooling should have priority.
-        if appliance_seasonal_mode is None:
-            _LOGGER.warning(
-                "Your Remeha appliance does not specify a seasonal mode, allowing DHW boiler heating at all hours."
+    # Generate rolling blocks of BOILER_MAX_ALLOWED_HEAT_DURATION hours which yield
+    # enough kWh to heat the boiler up to its setpoint.
+    def _generate_acceptable_hour_blocks():
+        usable_hours_list = [hour for r in usable_hours for hour in r]
+        for idx, _ in enumerate(usable_hours_list):
+            hours_subset: list[int] = (
+                usable_hours_list[idx : idx + BOILER_MAX_ALLOWED_HEAT_DURATION]
+                if len(usable_hours_list) >= idx + BOILER_MAX_ALLOWED_HEAT_DURATION
+                else usable_hours_list[idx:]
             )
 
-        usable_hours = (
-            [range(24)]
-            if appliance_seasonal_mode is None
-            else (
-                [range(10, 23)]
-                if appliance_seasonal_mode
-                in [SeasonalMode.SUMMER_NEUTRAL_BAND, SeasonalMode.SUMMER]
-                else [range(10, 17)]
-            )
-        )
+            # Calculate the total yield in kwh for the 3-hour block
+            total_yield: int = sum([forecasted_kwh_yield.get(h, 0) for h in hours_subset])
 
-        # Calculate static PV system efficiency, based on orientation and tilt.
-        # The tilt is rounded up to the next smallest multiple of ten.
-        static_pv_efficiency: float = PV_EFFICIENCY_TABLE[pv_system.orientation][
-            min(math.ceil(cast(float, pv_system.tilt) / 10) * 10, PV_MAX_TILT_DEGREES)
-        ]
-        _LOGGER.debug("Static PV efficiency is %.2f", static_pv_efficiency)
-
-        # Calculate dynamic PV system efficiency, using efficiency decrease of its age.
-        pv_efficiency: float = static_pv_efficiency
-        if pv_system.annual_efficiency_decrease != 0.0:
-            system_runtime: datetime.timedelta = datetime.date.today() - cast(
-                datetime.date, pv_system.installation_date
-            )
-            decreased_percent: float = (system_runtime.days / 365) * cast(
-                float, pv_system.annual_efficiency_decrease
-            )
-            pv_efficiency *= (100 - decreased_percent) / 100
-            _LOGGER.debug(
-                "PV efficiency is %.2f after applying annual efficiency decrease",
-                pv_efficiency,
-            )
-
-        # This results in a forecasted yield in kWh for all of the 24 hrs
-        forecasted_kwh_yield: dict[int, int] = {
-            fc.start_time.hour: int(
-                (
-                    (cast(int, fc.solar_irradiance) / MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL)
-                    * pv_system.nominal_power
-                    * pv_efficiency
-                )
-                / 1000.0
-            )
-            for fc in weather_forecast.forecasts
-            if fc.start_time.hour in [hour for r in usable_hours for hour in r]
-        }
-
-        # Generate rolling blocks of BOILER_MAX_ALLOWED_HEAT_DURATION hours which yield
-        # enough kWh to heat the boiler up to its setpoint.
-        def _generate_acceptable_hour_blocks():
-            usable_hours_list = [hour for r in usable_hours for hour in r]
-            for idx, _ in enumerate(usable_hours_list):
-                hours_subset: list[int] = (
-                    usable_hours_list[idx : idx + BOILER_MAX_ALLOWED_HEAT_DURATION]
-                    if len(usable_hours_list) >= idx + BOILER_MAX_ALLOWED_HEAT_DURATION
-                    else usable_hours_list[idx:]
+            if total_yield >= default_required_heating_kwh:
+                # Only yield the subset if it is a closed range
+                yield (
+                    hours_subset
+                    if hours_subset[-1] - hours_subset[0] + 1 == len(hours_subset)
+                    else []
                 )
 
-                # Calculate the total yield in kwh for the 3-hour block
-                total_yield: int = sum([forecasted_kwh_yield.get(h, 0) for h in hours_subset])
-
-                if total_yield >= default_required_heating_kwh:
-                    # Only yield the subset if it is a closed range
-                    yield (
-                        hours_subset
-                        if hours_subset[-1] - hours_subset[0] + 1 == len(hours_subset)
-                        else []
-                    )
-
-        # Take two timeslots, allowing for both morning- and afternoon heating.
-        # If no timeslots are available, use all usable hours: heating is allowed at any time during the day.
-        acceptable_hour_blocks: list[list[int]] = list(_generate_acceptable_hour_blocks())
-        accepted_hour_blocks: list[list[int]] = (
-            (
-                [acceptable_hour_blocks[0]]
-                if len(acceptable_hour_blocks) == 1
-                else [acceptable_hour_blocks[0], acceptable_hour_blocks[-1]]
-            )
-            if acceptable_hour_blocks
-            else [list(usable_hours[0])]
+    # Take two timeslots, allowing for both morning- and afternoon heating.
+    # If no timeslots are available, use all usable hours: heating is allowed at any time during the day.
+    acceptable_hour_blocks: list[list[int]] = list(_generate_acceptable_hour_blocks())
+    accepted_hour_blocks: list[list[int]] = (
+        (
+            [acceptable_hour_blocks[0]]
+            if len(acceptable_hour_blocks) == 1
+            else [acceptable_hour_blocks[0], acceptable_hour_blocks[-1]]
         )
+        if acceptable_hour_blocks
+        else [list(usable_hours[0])]
+    )
 
-        # The remaining hours are unaccepted.
-        unaccepted_hour_blocks: list[list[int]] = [
-            list(group)
-            for group in consecutive_groups(
-                [
-                    h
-                    for h in range(24)
-                    if h not in {hour for r in accepted_hour_blocks for hour in r}
-                ]
+    # The remaining hours are unaccepted.
+    unaccepted_hour_blocks: list[list[int]] = [
+        list(group)
+        for group in consecutive_groups(
+            [h for h in range(24) if h not in {hour for r in accepted_hour_blocks for hour in r}]
+        )
+    ]
+
+    # Generate the timeslots using the accepted hours yielding enough kWh.
+    def _generate_timeslots():
+        unaccepted_timeslots: list[Timeslot] = [
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.ECO,
+                activity=TimeslotActivity.DHW,
+                switch_time=datetime.time(hour=block[0]),
             )
+            for block in unaccepted_hour_blocks
         ]
 
-        # Generate the timeslots using the accepted hours yielding enough kWh.
-        def _generate_timeslots():
-            unaccepted_timeslots: list[Timeslot] = [
-                Timeslot(
-                    setpoint_type=TimeslotSetpointType.ECO,
-                    activity=TimeslotActivity.DHW,
-                    switch_time=datetime.time(hour=block[0]),
-                )
-                for block in unaccepted_hour_blocks
-            ]
+        accepted_timeslots: list[Timeslot] = [
+            Timeslot(
+                setpoint_type=TimeslotSetpointType.COMFORT,
+                activity=TimeslotActivity.DHW,
+                switch_time=datetime.time(hour=block[0]),
+            )
+            for block in accepted_hour_blocks
+        ]
 
-            accepted_timeslots: list[Timeslot] = [
-                Timeslot(
-                    setpoint_type=TimeslotSetpointType.COMFORT,
-                    activity=TimeslotActivity.DHW,
-                    switch_time=datetime.time(hour=block[0]),
-                )
-                for block in accepted_hour_blocks
-            ]
+        all_timeslots: list[Timeslot] = [*unaccepted_timeslots, *accepted_timeslots]
+        all_timeslots.sort()
 
-            all_timeslots: list[Timeslot] = [*unaccepted_timeslots, *accepted_timeslots]
-            all_timeslots.sort()
+        yield from all_timeslots
 
-            yield from all_timeslots
-
-        return cls(
-            id=schedule_id,
-            zone_id=boiler_zone.id,
-            # When presented with old data (like in testing), the week day returned here is
-            # probably not the actual current week day
-            day=Weekday(weather_forecast.forecasts[-1].start_time.weekday()),
-            time_slots=list(_generate_timeslots()),
-        )
-
-    def __str__(self):
-        """Return a human-readable representation of this schedule."""
-        return f"ZoneSchedule(id={self.id}, zone_id={self.zone_id}, day={self.day.name}, time_slots={self.time_slots})"
+    return list(_generate_timeslots())

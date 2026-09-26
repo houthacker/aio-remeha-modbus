@@ -15,13 +15,7 @@ from modbus_connection.model import (
     integer,
 )
 
-from aio_remeha_modbus.api.const import (
-    REMEHA_TIME_PROGRAM_BYTE_SIZE,
-    REMEHA_TIME_PROGRAM_SLOT_SIZE,
-    ClimateZoneScheduleId,
-)
-from aio_remeha_modbus.api.errors import InvalidZoneSchedule
-from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, Timeslot
+from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 
 
 def decode_bytes(words: list[int], word_order: WordOrder = "big") -> bytes:
@@ -166,85 +160,6 @@ class TimeStepsField(RegisterField[time]):
             return [TimeStepsField.nan]
 
         return [SteppedTimeOfDay.to_steps(value)]
-
-
-class TimeProgramField(RegisterField[list[Timeslot]]):
-    """A field that returns decodes a time program for a single day."""
-
-    max_element_count = int(REMEHA_TIME_PROGRAM_BYTE_SIZE / REMEHA_TIME_PROGRAM_SLOT_SIZE)
-    """The maximum amount of `Timeslot` instances in a given or returned `list[Timeslot]`"""
-
-    nan_bytes = b"".join([b"\xff"] * REMEHA_TIME_PROGRAM_BYTE_SIZE)
-
-    def __init__(
-        self,
-        address: int,
-        *,
-        word_order: WordOrder = "big",
-        writable: bool | WriteValidator = False,
-        stride: int = 0,
-        force_fc16: bool = False,
-    ) -> None:
-        """Create a new TimeProgramField."""
-
-        super().__init__(address, count=10, writable=writable, stride=stride, force_fc16=force_fc16)
-        self.word_order: WordOrder = word_order
-
-    @override
-    def decode(self, words: list[int], scale_exponent: int | None = None) -> list[Timeslot] | None:
-        schedule_bytes = decode_bytes(words=words, word_order=self.word_order)
-
-        if len(schedule_bytes) != REMEHA_TIME_PROGRAM_BYTE_SIZE:
-            raise ValueError(
-                f"Cannot decode time program: require {REMEHA_TIME_PROGRAM_BYTE_SIZE} bytes but got {len(schedule_bytes)}."
-            )
-
-        if schedule_bytes == TimeProgramField.nan_bytes:
-            return None
-
-        no_of_slots: int = int.from_bytes(schedule_bytes[0:1])
-
-        def _generate_timeslots():
-            for slot_index in range(
-                1, no_of_slots * REMEHA_TIME_PROGRAM_SLOT_SIZE, REMEHA_TIME_PROGRAM_SLOT_SIZE
-            ):
-                slot_bytes: bytes = schedule_bytes[
-                    slot_index : slot_index + REMEHA_TIME_PROGRAM_SLOT_SIZE
-                ]
-
-                yield Timeslot.decode(encoded_time_slot=slot_bytes)
-
-        try:
-            return [time_slot for time_slot in list(_generate_timeslots()) if time_slot is not None]
-        except ValueError as ex:
-            raise InvalidZoneSchedule(
-                zone=0, schedule_id=ClimateZoneScheduleId.SCHEDULE_1, is_dhw=False
-            ) from ex
-
-    @override
-    def encode(self, value: list[Timeslot], scale_exponent: int | None = None) -> list[int]:
-        if len(value) > TimeProgramField.max_element_count:
-            raise ValueError(
-                f"Too many Timeslots to encode. Maximum is {TimeProgramField.max_element_count}, got {len(value)}"
-            )
-
-        time_slot_count: bytes = len(value).to_bytes()
-        not_padded_slots: bytes = b"".join(
-            [
-                time_slot_count,
-                *[t.encode() for t in value],
-            ]
-        )
-
-        # Add padding null-bytes until length is REMEHA_TIME_PROGRAM_BYTE_SIZE bytes.
-        schedule_bytes = b"".join(
-            [
-                not_padded_slots,
-                *[b"\00" for _ in range(REMEHA_TIME_PROGRAM_BYTE_SIZE - len(not_padded_slots))],
-            ]
-        )
-
-        return encode_bytes(schedule_bytes, word_order=self.word_order)
 
 
 def binary(
@@ -470,11 +385,3 @@ def time_steps(address: int, *, writable: bool | WriteValidator = False) -> Time
     """Create a field that contains the time of day in 10-minute steps since midnight."""
 
     return TimeStepsField(address, writable=writable)
-
-
-def time_slots(
-    address: int, *, writable: bool | WriteValidator = False, stride: int = 0
-) -> TimeProgramField:
-    """Create a field that represents a time program."""
-
-    return TimeProgramField(address=address, writable=writable, stride=stride)

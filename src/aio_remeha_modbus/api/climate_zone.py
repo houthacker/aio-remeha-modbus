@@ -21,10 +21,10 @@ from aio_remeha_modbus.api.const import (
 )
 from aio_remeha_modbus.api.errors import RemehaApiError
 from aio_remeha_modbus.api.model import RemehaComponent
-from aio_remeha_modbus.helpers.fields import int16, nullable_binary, time_slots, uint8, uint16
+from aio_remeha_modbus.api.time_program import DaySchedule, TimeProgram, TimeslotSetpointType
+from aio_remeha_modbus.helpers.fields import int16, nullable_binary, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import (
     TimeOfDay,
-    TimeslotSetpointType,
     get_current_timeslot,
 )
 from aio_remeha_modbus.helpers.validation import in_range
@@ -181,30 +181,6 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
         ClimateZoneType.CH_ONLY,
         ClimateZoneType.CH_AND_COOLING,
     ] or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
-
-
-class DaySchedule(RemehaComponent):
-    """A component representing the slots in a time program for a single day."""
-
-    max_span = REMEHA_MAX_SPAN
-
-    slots = time_slots(address=689, writable=True, stride=0)
-    """The time slots for the related day."""
-
-    async def async_set_time_slots(self, time_slots: list[Timeslot]) -> None:
-        """Write the given time slots."""
-
-        await self.write("slots", time_slots)
-
-
-class TimeProgram(RemehaComponent):
-    """A components representing the schedules of a single time program."""
-
-    max_span = REMEHA_MAX_SPAN
-
-    day_schedules = repeating_group(
-        len(Weekday), DaySchedule, stride=REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS
-    )
 
 
 class ClimateZone(RemehaComponent):
