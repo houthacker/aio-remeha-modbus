@@ -71,4 +71,4 @@ and can be retrieved using `GTW08.zones`.
 ### Zone schedules
 When a `ClimateZone` is read from the appliance and its `mode` is `ClimateZoneMode.SCHEDULING`,
 the schedules for each `Weekday` are available through `ClimateZone.current_schedule` as
-instances of `api.schedule.ZoneSchedule`.
+instances of `gtw08.time_program.TimeProgram`.
