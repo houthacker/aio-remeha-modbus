@@ -101,7 +101,8 @@ class ZoneSchedule:
     """Implementation of the Remeha Modbus scheduling format.
 
     The GTW-08 parameter list shows that a user can choose from 3 distinct heating schedules
-    for a given zone. For cooling, one schedule can be used. All schedules are divided in 7 time programs, one for each weekday.
+    for a given zone. For cooling, one schedule can be used. All schedules are divided in 7 day schedules,
+    one for each weekday.
 
     ### Time program encoding
     A time program is encoded in a binary string, and is 20 bytes (10 registers) in size.

@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, tzinfo
 from enum import IntEnum
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from dateutil import relativedelta
 from modbus_connection import ModbusUnit
@@ -24,11 +24,13 @@ from aio_remeha_modbus.api.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import int16, nullable_binary, time_slots, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import (
     TimeOfDay,
-    Timeslot,
     TimeslotSetpointType,
     get_current_timeslot,
 )
 from aio_remeha_modbus.helpers.validation import in_range
+
+if TYPE_CHECKING:
+    from aio_remeha_modbus.helpers.gtw08 import Timeslot
 
 _LOGGER = logging.getLogger(__name__)
 
