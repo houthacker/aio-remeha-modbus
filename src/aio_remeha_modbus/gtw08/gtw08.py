@@ -1,5 +1,6 @@
 """Implementation of the Remeha Modbus API."""
 
+import logging
 import struct
 from datetime import tzinfo
 from typing import Any
@@ -10,12 +11,8 @@ from modbus_connection.model import ComponentGroup, Device, ManualComponent, Upd
 from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
 )
-from aio_remeha_modbus.gtw08.climate_zone import (
-    ClimateZone,
-)
-from aio_remeha_modbus.gtw08.const import (
-    REMEHA_MAX_SPAN,
-)
+from aio_remeha_modbus.gtw08.climate_zone import ClimateZone, ClimateZoneFunction
+from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, REMEHA_ZONE_RESERVED_REGISTERS
 from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.gtw08.main_control_monitoring import MainControlMonitoring
 from aio_remeha_modbus.gtw08.system_discovery_table import SystemDiscoveryTable
@@ -25,6 +22,8 @@ from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
 READINGS = ("main_control_monitoring", "appliance", "_zones")
 SETTINGS = ("discovery_table",)
 ALL = (*READINGS, *SETTINGS)
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class GTW08(Device):
@@ -95,6 +94,17 @@ class GTW08(Device):
 
         self.zones = []
         for idx in range(self.discovery_table.number_of_zones):
+            # Read the zone function first. We don't read disabled zones.
+            zone_function_address = 641 + REMEHA_ZONE_RESERVED_REGISTERS * idx
+            registers = await self.modbus_unit.read_holding_registers(
+                address=zone_function_address, count=1
+            )
+            zone_function = ClimateZoneFunction(registers[0])
+
+            if zone_function is ClimateZoneFunction.DISABLED:
+                _LOGGER.info("Skipping zone %d because it is disabled.", idx + 1)
+                continue
+
             climate_zone = ClimateZone(
                 self._unit,
                 sequence_id=idx + 1,
