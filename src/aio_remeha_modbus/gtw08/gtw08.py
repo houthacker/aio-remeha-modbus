@@ -7,18 +7,18 @@ from typing import Any
 from modbus_connection import ModbusExceptionError, ModbusUnit
 from modbus_connection.model import ComponentGroup, Device, ManualComponent, UpdateReport
 
-from aio_remeha_modbus.api.appliance import (
+from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
 )
-from aio_remeha_modbus.api.climate_zone import (
+from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
 )
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.gtw08.const import (
     REMEHA_MAX_SPAN,
 )
-from aio_remeha_modbus.api.errors import RemehaApiError, RemehaModbusError
-from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
-from aio_remeha_modbus.api.system_discovery_table import SystemDiscoveryTable
+from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
+from aio_remeha_modbus.gtw08.main_control_monitoring import MainControlMonitoring
+from aio_remeha_modbus.gtw08.system_discovery_table import SystemDiscoveryTable
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
 
 # Attribute names of syb-systems each update method reads.

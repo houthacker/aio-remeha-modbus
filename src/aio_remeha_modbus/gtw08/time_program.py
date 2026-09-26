@@ -8,15 +8,15 @@ from modbus_connection import WordOrder
 from modbus_connection.model import RegisterField, WriteValidator, repeating_group
 from pydantic.dataclasses import dataclass
 
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.gtw08.const import (
     REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
     REMEHA_MAX_SPAN,
     REMEHA_TIME_PROGRAM_BYTE_SIZE,
     REMEHA_TIME_PROGRAM_SLOT_SIZE,
     Weekday,
 )
-from aio_remeha_modbus.api.errors import InvalidZoneSchedule
-from aio_remeha_modbus.api.model import RemehaComponent
+from aio_remeha_modbus.gtw08.errors import InvalidZoneSchedule
+from aio_remeha_modbus.gtw08.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import decode_bytes, encode_bytes
 from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 

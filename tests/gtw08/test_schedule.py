@@ -4,15 +4,15 @@ from datetime import date, time
 
 import pytest
 
-from aio_remeha_modbus.api import GTW08
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.gtw08 import GTW08
+from aio_remeha_modbus.gtw08.const import (
     BoilerConfiguration,
     BoilerEnergyLabel,
     PVSystem,
     PVSystemOrientation,
     UnitOfTemperature,
 )
-from aio_remeha_modbus.api.schedule import (
+from aio_remeha_modbus.gtw08.schedule import (
     HourlyForecast,
     Timeslot,
     TimeslotActivity,

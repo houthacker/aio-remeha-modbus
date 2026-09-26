@@ -5,7 +5,7 @@ from datetime import time
 import pytest
 from modbus_connection.mock import MockModbusUnit
 
-from aio_remeha_modbus.api.appliance import Appliance
+from aio_remeha_modbus.gtw08.appliance import Appliance
 
 
 @pytest.mark.asyncio

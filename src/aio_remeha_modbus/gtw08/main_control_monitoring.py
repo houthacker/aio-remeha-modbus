@@ -4,8 +4,8 @@ from enum import IntEnum, IntFlag, auto
 
 from modbus_connection.model import enum, flags
 
-from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN
-from aio_remeha_modbus.api.model import RemehaComponent
+from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN
+from aio_remeha_modbus.gtw08.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import uint16
 
 

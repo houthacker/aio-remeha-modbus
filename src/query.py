@@ -12,11 +12,11 @@ from modbus_connection.cli_helper import (
     print_component,
 )
 
-from aio_remeha_modbus.api import GTW08
-from aio_remeha_modbus.api.appliance import Appliance
-from aio_remeha_modbus.api.climate_zone import ClimateZone
-from aio_remeha_modbus.api.main_control_monitoring import MainControlMonitoring
-from aio_remeha_modbus.api.system_discovery_table import SystemDiscoveryTable
+from aio_remeha_modbus.gtw08 import GTW08
+from aio_remeha_modbus.gtw08.appliance import Appliance
+from aio_remeha_modbus.gtw08.climate_zone import ClimateZone
+from aio_remeha_modbus.gtw08.main_control_monitoring import MainControlMonitoring
+from aio_remeha_modbus.gtw08.system_discovery_table import SystemDiscoveryTable
 from aio_remeha_modbus.helpers.modbus import RetryingModbusUnit
 
 

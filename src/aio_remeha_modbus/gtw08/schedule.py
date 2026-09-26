@@ -8,9 +8,9 @@ from typing import Any, Final, Self, cast
 
 from dateutil import parser
 
-from aio_remeha_modbus.api.appliance import SeasonalMode
-from aio_remeha_modbus.api.climate_zone import ClimateZoneScheduleId
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.gtw08.appliance import SeasonalMode
+from aio_remeha_modbus.gtw08.climate_zone import ClimateZoneScheduleId
+from aio_remeha_modbus.gtw08.const import (
     AUTO_SCHEDULE_MINIMAL_END_HOUR,
     BOILER_MAX_ALLOWED_HEAT_DURATION,
     MAXIMUM_NORMAL_SURFACE_IRRADIANCE_NL,
@@ -23,8 +23,8 @@ from aio_remeha_modbus.api.const import (
     PVSystem,
     UnitOfTemperature,
 )
-from aio_remeha_modbus.api.errors import AutoSchedulingError
-from aio_remeha_modbus.api.time_program import Timeslot, TimeslotActivity, TimeslotSetpointType
+from aio_remeha_modbus.gtw08.errors import AutoSchedulingError
+from aio_remeha_modbus.gtw08.time_program import Timeslot, TimeslotActivity, TimeslotSetpointType
 from aio_remeha_modbus.helpers.iterators import consecutive_groups
 
 _LOGGER = logging.getLogger(__name__)

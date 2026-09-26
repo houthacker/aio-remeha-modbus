@@ -4,13 +4,13 @@ from datetime import time
 
 import pytest
 
-from aio_remeha_modbus.api import GTW08
-from aio_remeha_modbus.api.appliance import (
+from aio_remeha_modbus.gtw08 import GTW08
+from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
     CoolingType,
     SilentMode,
 )
-from aio_remeha_modbus.api.climate_zone import (
+from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
     ClimateZoneFunction,
     ClimateZoneHeatingMode,
@@ -18,9 +18,9 @@ from aio_remeha_modbus.api.climate_zone import (
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN, Weekday
-from aio_remeha_modbus.api.main_control_monitoring import ApplianceErrorPriority, MonitoringStatus
-from aio_remeha_modbus.api.schedule import (
+from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, Weekday
+from aio_remeha_modbus.gtw08.main_control_monitoring import ApplianceErrorPriority, MonitoringStatus
+from aio_remeha_modbus.gtw08.schedule import (
     Timeslot,
     TimeslotActivity,
     TimeslotSetpointType,

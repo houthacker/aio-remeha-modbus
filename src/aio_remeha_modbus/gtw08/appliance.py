@@ -5,8 +5,8 @@ from enum import IntEnum
 
 from modbus_connection.model import boolean, enum, uint32
 
-from aio_remeha_modbus.api.const import REMEHA_MAX_SPAN, SeasonalMode
-from aio_remeha_modbus.api.model import RemehaComponent
+from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, SeasonalMode
+from aio_remeha_modbus.gtw08.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
 
 

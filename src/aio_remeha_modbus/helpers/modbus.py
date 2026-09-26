@@ -7,7 +7,7 @@ from typing import ParamSpec, TypeVar, cast
 from modbus_connection import ModbusUnit
 from typing_extensions import TypeForm
 
-from aio_remeha_modbus.api.errors import TransientModbusError
+from aio_remeha_modbus.gtw08.errors import TransientModbusError
 
 
 class _RetryStatistics:

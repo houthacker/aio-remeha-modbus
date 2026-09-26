@@ -10,7 +10,7 @@ from dateutil import relativedelta
 from modbus_connection import ModbusUnit
 from modbus_connection.model import boolean, enum, repeating_group, string
 
-from aio_remeha_modbus.api.const import (
+from aio_remeha_modbus.gtw08.const import (
     REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
     REMEHA_MAX_SPAN,
     REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
@@ -19,9 +19,9 @@ from aio_remeha_modbus.api.const import (
     Limits,
     Weekday,
 )
-from aio_remeha_modbus.api.errors import RemehaApiError
-from aio_remeha_modbus.api.model import RemehaComponent
-from aio_remeha_modbus.api.time_program import DaySchedule, TimeProgram, TimeslotSetpointType
+from aio_remeha_modbus.gtw08.errors import RemehaApiError
+from aio_remeha_modbus.gtw08.model import RemehaComponent
+from aio_remeha_modbus.gtw08.time_program import DaySchedule, TimeProgram, TimeslotSetpointType
 from aio_remeha_modbus.helpers.fields import int16, nullable_binary, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import (
     TimeOfDay,

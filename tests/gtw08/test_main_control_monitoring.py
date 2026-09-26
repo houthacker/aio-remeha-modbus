@@ -3,7 +3,7 @@
 import pytest
 from modbus_connection.mock import MockModbusUnit
 
-from aio_remeha_modbus.api.main_control_monitoring import (
+from aio_remeha_modbus.gtw08.main_control_monitoring import (
     ApplianceErrorPriority,
     MainControlMonitoring,
 )

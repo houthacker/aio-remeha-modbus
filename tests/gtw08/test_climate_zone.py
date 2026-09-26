@@ -7,22 +7,22 @@ import pytest
 from dateutil import tz
 from freezegun import freeze_time
 
-from aio_remeha_modbus.api import GTW08
-from aio_remeha_modbus.api.climate_zone import (
+from aio_remeha_modbus.gtw08 import GTW08
+from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
     ClimateZoneFunction,
     ClimateZoneMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
 )
-from aio_remeha_modbus.api.const import REMEHA_ZONE_RESERVED_REGISTERS, Weekday
-from aio_remeha_modbus.api.errors import InvalidZoneSchedule, RemehaApiError
-from aio_remeha_modbus.api.schedule import (
+from aio_remeha_modbus.gtw08.const import REMEHA_ZONE_RESERVED_REGISTERS, Weekday
+from aio_remeha_modbus.gtw08.errors import InvalidZoneSchedule, RemehaApiError
+from aio_remeha_modbus.gtw08.schedule import (
     Timeslot,
     TimeslotActivity,
     TimeslotSetpointType,
 )
-from aio_remeha_modbus.api.system_discovery_table import (
+from aio_remeha_modbus.gtw08.system_discovery_table import (
     DeviceBoard,
     DeviceBoardCategory,
     DeviceBoardType,

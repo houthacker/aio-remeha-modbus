@@ -11,7 +11,7 @@ from dateutil import tz
 from modbus_connection import ModbusUnit
 from modbus_connection.mock import MockModbusUnit
 
-from aio_remeha_modbus.api import GTW08
+from aio_remeha_modbus.gtw08 import GTW08
 
 TESTING_TIME_ZONE: Final[str] = "Europe/Amsterdam"
 

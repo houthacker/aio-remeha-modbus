@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Final, overload
 
 from dateutil import relativedelta
 
-from aio_remeha_modbus.api.const import REMEHA_TIME_STEP_MINUTES, Weekday
+from aio_remeha_modbus.gtw08.const import REMEHA_TIME_STEP_MINUTES, Weekday
 
 if TYPE_CHECKING:
-    from aio_remeha_modbus.api.time_program import Timeslot
+    from aio_remeha_modbus.gtw08.time_program import Timeslot
 
 
 class SteppedTimeOfDay:
