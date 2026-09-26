@@ -136,6 +136,8 @@ async def test_read_appliance(gtw_08: GTW08):
     assert appliance.silent_mode == SilentMode.LEVEL_1
     assert appliance.silent_mode_start_time == time(hour=22)
     assert appliance.silent_mode_end_time == time(hour=7)
+    assert appliance.buffer_temperature_bottom == 24.5
+    assert appliance.buffer_temperature_top == 23.0
 
     assert ctrl_monitoring.monitoring_status is not None
     status: MonitoringStatus = ctrl_monitoring.monitoring_status

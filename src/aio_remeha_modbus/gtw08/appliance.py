@@ -298,7 +298,14 @@ class Appliance(RemehaComponent):
     """
 
     max_span = REMEHA_MAX_SPAN
-    register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9230, 9230))
+    register_ranges = (
+        (384, 390),
+        (400, 438),
+        (439, 494),
+        (500, 503),
+        (7600, 7601),
+        (9230, 9230),
+    )
 
     outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""
@@ -428,6 +435,12 @@ class Appliance(RemehaComponent):
       * To force cooling, set HVACMode to COOL
       * To let the system decide to cool or heat, set HVACMode to HEAT_COOL
     """
+
+    buffer_temperature_bottom = int16(address=7600, scale=0.01, unit="°C")
+    """The measured buffer tank temperature at the bottom sensor (parameter BM001)."""
+
+    buffer_temperature_top = int16(address=7601, scale=0.01, unit="°C")
+    """The measured buffer tank temperature at the top sensor (parameter BM002)."""
 
     # TODO This is a register for hybrid appliances. If more are required, move to dedicated class.
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
