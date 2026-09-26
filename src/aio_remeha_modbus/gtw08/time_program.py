@@ -143,7 +143,7 @@ class TimeProgramField(RegisterField[list[Timeslot]]):
     max_element_count = int(REMEHA_TIME_PROGRAM_BYTE_SIZE / REMEHA_TIME_PROGRAM_SLOT_SIZE)
     """The maximum amount of `Timeslot` instances in a given or returned `list[Timeslot]`"""
 
-    nan_bytes = b"".join([b"\xff"] * REMEHA_TIME_PROGRAM_BYTE_SIZE)
+    nan_bytes = b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00"
 
     def __init__(
         self,
