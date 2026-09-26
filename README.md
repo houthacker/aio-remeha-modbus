@@ -7,7 +7,8 @@
 
 ![GitHub License](https://img.shields.io/github/license/houthacker/aio-remeha-modbus)
 [![ci](https://github.com/houthacker/aio-remeha-modbus/actions/workflows/ci.yaml/badge.svg)](https://github.com/houthacker/aio-remeha-modbus/actions/workflows/ci.yaml)
-[![badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/houthacker/ab326b4825c5466a103921f42bf79ba9/raw/86a287f059442adaca5578e5c3a80b07239eb501/aio-remeha-modbus-cov-badge.json)](https://github.com/houthacker/aio-remeha-modbus/actions/workflows/coverage.yaml)
+[![badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Fhouthacker%2Fab326b4825c5466a103921f42bf79ba9%2Fraw%2F55fa764f342a9495744ae834408c5768a3242711%2Faio-remeha-modbus-cov-badge.json
+)](https://github.com/houthacker/aio-remeha-modbus/actions/workflows/coverage.yaml)
 
 `aio-remeha-modbus` is an async python API for Remeha appliances.
 
