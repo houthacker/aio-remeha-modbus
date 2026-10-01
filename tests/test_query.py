@@ -409,7 +409,7 @@ async def test_run_gtw08_selective_prints_requested_components(
         ),
     ],
 )
-async def test_main_queries_gateway_and_exits_zero(
+async def test_main_queries_gateway_and_exits_zero(  # ruff: ignore[too-many-positional-arguments]
     cli_connection: MockModbusConnection,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -455,7 +455,9 @@ async def test_main_prints_modbus_retries(
     unit = cli_connection.for_unit(_CLI_UNIT_ID)
     _isystem_seed(unit)
     unit.fail_read(601, IllegalDataAddressError())
-    monkeypatch.setattr(sys, "argv", ["remeha-query", "localhost", "--gateway", "gtw26", "--sensors"])
+    monkeypatch.setattr(
+        sys, "argv", ["remeha-query", "localhost", "--gateway", "gtw26", "--sensors"]
+    )
 
     exit_code = await query.main()
 
