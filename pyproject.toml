@@ -224,3 +224,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "PLC2701"]
 "tests/gtw26/*" = ["D", "PLR0917", "PT006", "SLF001"]
+
+# Allow undocumented public methods in Protocol implementations.
+"src/aio_remeha_modbus/model/gtw08/*" = ["D102"]
+"src/aio_remeha_modbus/model/gtw26/*" = ["D102"]
