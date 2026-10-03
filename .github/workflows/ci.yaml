@@ -52,6 +52,13 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
+      - name: Register mypy problem matcher
+        run: |
+          echo "::add-matcher::.github/workflows/matchers/mypy.json"
+
+      - name: Register Sphinx problem matcher
+        uses: sphinx-doc/github-problem-matcher@master
+
       - name: prek
         run: uv run --no-sync prek run
 
@@ -59,9 +66,6 @@ jobs:
         run: |
           set -o pipefail
           uv run --no-sync pytest --cov-report=term-missing --junitxml=${{ github.workspace }}/junit-coverage.xml --cov=aio_remeha_modbus | tee ${{ github.workspace }}/pytest-coverage.txt
-
-      - name: Show sphinx warnings nicely in PR
-        uses: sphinx-doc/github-problem-matcher@master
 
       - name: Build docs
         run: uv run --group docs sphinx-build -W -b html docs/source docs/_build/html

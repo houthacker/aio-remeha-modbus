@@ -18,6 +18,24 @@
           }
         ]
       }
+    },
+    {
+      "label": "uv: run mypy",
+      "type": "shell",
+      "command": "uv run --no-sync mypy",
+      "group": "build",
+      "problemMatcher": {
+        "owner": "mypy",
+        "pattern": [
+          {
+            "regexp": "^(.+):(\\d+):\\s(error|warning):\\s(.+)$",
+            "file": 1,
+            "line": 2,
+            "severity": 3,
+            "message": 4
+          }
+        ]
+      }
     }
   ]
 }
