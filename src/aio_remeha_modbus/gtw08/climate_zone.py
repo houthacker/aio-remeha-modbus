@@ -11,7 +11,6 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import boolean, enum, repeating_group, string
 
 from aio_remeha_modbus.gtw08.const import (
-    REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
     REMEHA_MAX_SPAN,
     REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
     REMEHA_ZONE_RESERVED_REGISTERS,
@@ -25,6 +24,7 @@ from aio_remeha_modbus.gtw08.time_program import DaySchedule, TimeProgram, Times
 from aio_remeha_modbus.helpers.fields import int16, nullable_binary, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import (
     TimeOfDay,
+    day_schedule_start_address,
     get_current_timeslot,
 )
 from aio_remeha_modbus.helpers.validation import in_range
@@ -143,14 +143,6 @@ def _map_selected_schedule_for_write(
         if selected_schedule is ClimateZoneScheduleId.SCHEDULE_4
         else selected_schedule
     )
-
-
-def _time_program_start_address(
-    zone_id: int = 1, schedule_id: ClimateZoneScheduleId = ClimateZoneScheduleId.SCHEDULE_1
-) -> int:
-    return (
-        zone_id - 1
-    ) * REMEHA_ZONE_RESERVED_REGISTERS + schedule_id * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
 
 
 def is_domestic_hot_water(type: ClimateZoneType, function: ClimateZoneFunction) -> bool:
@@ -744,9 +736,8 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
             # Sequentially write all schedules.
             for day in Weekday:
-                time_program_start = _time_program_start_address(self.id, schedule_id)
-                day_schedule_start = (
-                    time_program_start + day * REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS
+                day_schedule_start = day_schedule_start_address(
+                    self.id, schedule_id=schedule_id, day=day
                 )
                 day_schedule = DaySchedule(
                     unit=self._unit,
@@ -756,6 +747,25 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 await day_schedule.async_set_time_slots(schedule[day] or [])
         else:
             raise RemehaApiError("schedule_write_not_supported")
+
+    async def async_set_day_schedule(
+        self, schedule_id: ClimateZoneScheduleId, day: Weekday, time_slots: list[Timeslot]
+    ) -> None:
+        """Write a schedule for a single day.
+
+        Setting a day schedule does not select it. For that, call ``async_set_selected_schedule()``.
+
+        Args:
+            schedule_id (ClimateZoneScheduleId): The containing schedule.
+            day (Weekday): The week day of the time slots.
+            time_slots (list[Timeslot]): The time slots to set.
+
+        """
+
+        day_schedule_start = day_schedule_start_address(self.id, schedule_id, day)
+        day_schedule = DaySchedule(unit=self._unit, base_offset=day_schedule_start)
+
+        await day_schedule.async_set_time_slots(time_slots)
 
     def __eq__(self, other: object) -> bool:
         """Compare this `ClimateZone` with another for equality.

@@ -19,13 +19,11 @@ from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZoneType,
     _map_selected_schedule_for_read,
     _map_selected_schedule_for_write,
-    _time_program_start_address,
     _writable_schedule_id,
     is_central_heating,
     is_domestic_hot_water,
 )
 from aio_remeha_modbus.gtw08.const import (
-    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
     REMEHA_ZONE_RESERVED_REGISTERS,
     Limits,
     Weekday,
@@ -750,34 +748,6 @@ def test_writable_schedule_id():
         validate(ClimateZoneScheduleId.SCHEDULE_4)
 
 
-@pytest.mark.parametrize(
-    ("zone_id", "schedule_id", "expected"),
-    [
-        (1, ClimateZoneScheduleId.SCHEDULE_1, 0),
-        (1, ClimateZoneScheduleId.SCHEDULE_2, REMEHA_TIME_PROGRAM_RESERVED_REGISTERS),
-        (1, ClimateZoneScheduleId.SCHEDULE_4, 3 * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS),
-        (2, ClimateZoneScheduleId.SCHEDULE_1, REMEHA_ZONE_RESERVED_REGISTERS),
-        (
-            3,
-            ClimateZoneScheduleId.SCHEDULE_3,
-            2 * REMEHA_ZONE_RESERVED_REGISTERS + 2 * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
-        ),
-    ],
-)
-def test_time_program_start_address(
-    zone_id: int, schedule_id: ClimateZoneScheduleId, expected: int
-):
-    """Test the offset of a time program, relative to the start of the first zone."""
-
-    assert _time_program_start_address(zone_id, schedule_id) == expected
-
-
-def test_time_program_start_address_defaults():
-    """Test that the defaults refer to the first schedule of the first zone."""
-
-    assert _time_program_start_address() == 0
-
-
 @pytest.mark.asyncio
 async def test_climate_zone_defaults(remeha_modbus_unit: MockModbusUnit):
     """Test the default arguments of a climate zone."""
@@ -1335,6 +1305,77 @@ async def test_climate_zone_set_current_schedule_writes_selected_schedule_only(g
     await zone.async_set_selected_schedule(ClimateZoneScheduleId.SCHEDULE_2)
     await gtw_08.async_update()
     assert zone.current_schedule == dict.fromkeys(Weekday, other)
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_set_day_schedule_writes_single_day(gtw_08: GTW08):
+    """Test that only the given day of the given schedule is changed."""
+
+    zone = gtw_08.zones[1]
+    await zone.async_set_current_schedule(
+        ClimateZoneScheduleId.SCHEDULE_1, dict.fromkeys(Weekday, _DHW_SCHEDULE)
+    )
+    other = [Timeslot(TimeslotSetpointType.COMFORT, TimeslotActivity.DHW, time(6, 0))]
+
+    await zone.async_set_day_schedule(ClimateZoneScheduleId.SCHEDULE_1, Weekday.WEDNESDAY, other)
+    await gtw_08.async_update()
+
+    assert zone.current_schedule == {
+        **dict.fromkeys(Weekday, _DHW_SCHEDULE),
+        Weekday.WEDNESDAY: other,
+    }
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_set_day_schedule_does_not_select_schedule(gtw_08: GTW08):
+    """Test that writing a day schedule leaves the selected schedule untouched."""
+
+    zone = gtw_08.zones[1]
+    unit = get_modbus_unit(gtw_08)
+    written: list[int] = []
+    unit.on_write(lambda event: written.append(event.address))
+    selected_schedule_register = 688 + _DHW_ZONE_OFFSET
+    assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_1
+
+    await zone.async_set_day_schedule(
+        ClimateZoneScheduleId.SCHEDULE_3, Weekday.MONDAY, _DHW_SCHEDULE
+    )
+
+    assert selected_schedule_register not in written
+    assert zone.selected_schedule is ClimateZoneScheduleId.SCHEDULE_1
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_set_day_schedule_writes_other_schedule(gtw_08: GTW08):
+    """Test that a day of a non-selected schedule is readable once it is selected."""
+
+    zone = gtw_08.zones[1]
+    await zone.async_set_day_schedule(
+        ClimateZoneScheduleId.SCHEDULE_2, Weekday.FRIDAY, _DHW_SCHEDULE
+    )
+
+    await zone.async_set_selected_schedule(ClimateZoneScheduleId.SCHEDULE_2)
+    await gtw_08.async_update()
+
+    assert zone.current_schedule is not None
+    assert zone.current_schedule[Weekday.FRIDAY] == _DHW_SCHEDULE
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_set_day_schedule_empty_clears_day(gtw_08: GTW08):
+    """Test that an empty list of time slots clears the day."""
+
+    zone = gtw_08.zones[1]
+    await zone.async_set_current_schedule(
+        ClimateZoneScheduleId.SCHEDULE_1, dict.fromkeys(Weekday, _DHW_SCHEDULE)
+    )
+
+    await zone.async_set_day_schedule(ClimateZoneScheduleId.SCHEDULE_1, Weekday.SUNDAY, [])
+    await gtw_08.async_update()
+
+    assert zone.current_schedule is not None
+    assert zone.current_schedule[Weekday.SUNDAY] == []
+    assert zone.current_schedule[Weekday.SATURDAY] == _DHW_SCHEDULE
 
 
 @pytest.mark.asyncio
