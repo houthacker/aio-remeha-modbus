@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING, Final, overload
 
 from dateutil import relativedelta
 
-from aio_remeha_modbus.gtw08.const import REMEHA_TIME_STEP_MINUTES, Weekday
+from aio_remeha_modbus.gtw08.const import (
+    REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
+    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
+    REMEHA_TIME_STEP_MINUTES,
+    REMEHA_ZONE_RESERVED_REGISTERS,
+    ClimateZoneScheduleId,
+    Weekday,
+)
 
 if TYPE_CHECKING:
     from aio_remeha_modbus.gtw08.time_program import Timeslot
@@ -167,4 +174,38 @@ def get_current_timeslot(
         )
         if time_slots is not None
         else None
+    )
+
+
+def time_program_start_address(
+    zone_id: int = 1, schedule_id: ClimateZoneScheduleId = ClimateZoneScheduleId.SCHEDULE_1
+) -> int:
+    """Return the address of the time program, relative to the start of the first zone.
+
+    Args:
+        zone_id (int): The one-based id of the containing ``ClimateZone``.
+        schedule_id (ClimateZoneScheduleId): The schedule to base the address on.
+
+    """
+
+    return (
+        zone_id - 1
+    ) * REMEHA_ZONE_RESERVED_REGISTERS + schedule_id * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
+
+
+def day_schedule_start_address(
+    zone_id: int, schedule_id: ClimateZoneScheduleId, day: Weekday
+) -> int:
+    """Return the address of the day schedule, relative to the start of the first zone.
+
+    Args:
+        zone_id (int): The one-based id of the containing ``ClimateZone``.
+        schedule_id (ClimateZoneScheduleId): The containing schedule.
+        day (Weekday): The day of the week for the day schedule.
+
+    """
+
+    return (
+        time_program_start_address(zone_id, schedule_id)
+        + day * REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS
     )

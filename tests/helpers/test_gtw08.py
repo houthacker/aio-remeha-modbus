@@ -7,9 +7,21 @@ import pytest
 from dateutil import tz
 from freezegun import freeze_time
 
-from aio_remeha_modbus.gtw08.const import Weekday
+from aio_remeha_modbus.gtw08.const import (
+    REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
+    REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
+    REMEHA_ZONE_RESERVED_REGISTERS,
+    ClimateZoneScheduleId,
+    Weekday,
+)
 from aio_remeha_modbus.gtw08.time_program import Timeslot, TimeslotActivity, TimeslotSetpointType
-from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay, TimeOfDay, get_current_timeslot
+from aio_remeha_modbus.helpers.gtw08 import (
+    SteppedTimeOfDay,
+    TimeOfDay,
+    day_schedule_start_address,
+    get_current_timeslot,
+    time_program_start_address,
+)
 
 
 def test_time_of_day_encode():
@@ -164,3 +176,61 @@ def test_get_current_timeslot_uses_time_zone():
 
     assert get_current_timeslot(schedule, UTC) == monday[0]
     assert get_current_timeslot(schedule, tz.gettz("Europe/Amsterdam")) == tuesday[0]
+
+
+@pytest.mark.parametrize(
+    ("zone_id", "schedule_id", "expected"),
+    [
+        (1, ClimateZoneScheduleId.SCHEDULE_1, 0),
+        (1, ClimateZoneScheduleId.SCHEDULE_2, REMEHA_TIME_PROGRAM_RESERVED_REGISTERS),
+        (1, ClimateZoneScheduleId.SCHEDULE_4, 3 * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS),
+        (2, ClimateZoneScheduleId.SCHEDULE_1, REMEHA_ZONE_RESERVED_REGISTERS),
+        (
+            3,
+            ClimateZoneScheduleId.SCHEDULE_3,
+            2 * REMEHA_ZONE_RESERVED_REGISTERS + 2 * REMEHA_TIME_PROGRAM_RESERVED_REGISTERS,
+        ),
+    ],
+)
+def test_time_program_start_address(
+    zone_id: int, schedule_id: ClimateZoneScheduleId, expected: int
+):
+    """Test the offset of a time program, relative to the start of the first zone."""
+
+    assert time_program_start_address(zone_id, schedule_id) == expected
+
+
+def test_time_program_start_address_defaults():
+    """Test that the defaults refer to the first schedule of the first zone."""
+
+    assert time_program_start_address() == 0
+
+
+@pytest.mark.parametrize(
+    ("zone_id", "schedule_id", "day", "expected"),
+    [
+        pytest.param(1, ClimateZoneScheduleId.SCHEDULE_1, Weekday.MONDAY, 0, id="first-day"),
+        pytest.param(
+            1,
+            ClimateZoneScheduleId.SCHEDULE_1,
+            Weekday.SUNDAY,
+            6 * REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
+            id="last-day",
+        ),
+        pytest.param(
+            2,
+            ClimateZoneScheduleId.SCHEDULE_2,
+            Weekday.WEDNESDAY,
+            REMEHA_ZONE_RESERVED_REGISTERS
+            + REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
+            + 2 * REMEHA_DAY_SCHEDULE_RESERVED_REGISTERS,
+            id="zone-schedule-and-day",
+        ),
+    ],
+)
+def test_day_schedule_start_address(
+    zone_id: int, schedule_id: ClimateZoneScheduleId, day: Weekday, expected: int
+):
+    """Test the offset of a day schedule, relative to the start of the first zone."""
+
+    assert day_schedule_start_address(zone_id, schedule_id, day) == expected
