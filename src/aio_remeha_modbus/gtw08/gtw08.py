@@ -21,16 +21,28 @@ from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
 )
 from aio_remeha_modbus.gtw08.buffer_tank import BufferTank
-from aio_remeha_modbus.gtw08.climate_zone import ClimateZone, ClimateZoneFunction
-from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, REMEHA_ZONE_RESERVED_REGISTERS
-from aio_remeha_modbus.gtw08.errors import RemehaApiError, RemehaModbusError
+from aio_remeha_modbus.gtw08.climate_zone import (
+    ClimateZone,
+    ClimateZoneFunction,
+    ClimateZoneType,
+    is_domestic_hot_water,
+)
+from aio_remeha_modbus.gtw08.const import (
+    REMEHA_MAX_SPAN,
+    REMEHA_ZONE_RESERVED_REGISTERS,
+    ClimateZoneScheduleId,
+    Weekday,
+)
+from aio_remeha_modbus.gtw08.errors import InvalidZoneSchedule, RemehaApiError, RemehaModbusError
 from aio_remeha_modbus.gtw08.main_control_monitoring import MainControlMonitoring
 from aio_remeha_modbus.gtw08.system_discovery_table import (
     DeviceBoard,
     DeviceBoardType,
     SystemDiscoveryTable,
 )
+from aio_remeha_modbus.gtw08.time_program import DaySchedule, Timeslot
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
+from aio_remeha_modbus.helpers.gtw08 import day_schedule_start_address
 
 # Attribute names of syb-systems each update method reads.
 READINGS = ("main_control_monitoring", "appliance", "buffer_tank", "_zones")
@@ -218,6 +230,48 @@ class GTW08(Device):
     def name(self) -> str:
         """The modbus hub name."""
         return self._name
+
+    async def async_repair_invalid_schedules(self) -> int:
+        """Overwrite all unparsable day schedules with a default schedule.
+
+        This works on the raw schedule registers, since a zone with an invalid schedule
+        is not available through the API.
+
+        Returns:
+            `int`: The amount of day schedules that were overwritten.
+
+        """
+
+        unit = self.modbus_unit
+        number_of_zones = self.discovery_table.number_of_zones or 0
+        repaired = 0
+
+        for zone_id in range(1, number_of_zones + 1):
+            # Read the zone type and function (consecutive registers) to create the right default.
+            zone_type, zone_function = await unit.read_holding_registers(
+                address=640 + REMEHA_ZONE_RESERVED_REGISTERS * (zone_id - 1), count=2
+            )
+
+            default_slot = Timeslot.create_default(
+                is_domestic_hot_water(
+                    ClimateZoneType(zone_type), ClimateZoneFunction(zone_function)
+                )
+            )
+
+            for schedule_id in ClimateZoneScheduleId:
+                for day in Weekday:
+                    day_schedule = DaySchedule(
+                        unit=unit,
+                        base_offset=day_schedule_start_address(zone_id, schedule_id, day),
+                    )
+
+                    try:
+                        await day_schedule.async_update()
+                    except InvalidZoneSchedule:
+                        await day_schedule.async_set_time_slots([default_slot])
+                        repaired += 1
+
+        return repaired
 
     async def async_read_registers(
         self, address: int, *, count: int = 1, struct_format: str | bytes = "=H"
