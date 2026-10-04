@@ -38,6 +38,7 @@ from aio_remeha_modbus.gtw08.schedule import (
 )
 from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoardType
 from aio_remeha_modbus.helpers.fields import decode_bytes
+from tests.conftest import corrupt_day_schedule, day_schedule_address, read_day_schedule
 
 
 @pytest.mark.asyncio
@@ -424,3 +425,70 @@ async def test_detection_no_gateway(remeha_modbus_unit):
     detection = await GTW08.async_detect(remeha_modbus_unit)
     assert detection.success is False
     assert detection.failure_reason is DetectionFailureReason.NO_GATEWAY
+
+
+@pytest.mark.asyncio
+async def test_repair_invalid_schedules_none_invalid(
+    gtw_08: GTW08, remeha_modbus_unit: MockModbusUnit
+):
+    """Nothing is written when all schedules can be parsed."""
+
+    before = dict(remeha_modbus_unit.holding)
+
+    assert await gtw_08.async_repair_invalid_schedules() == 0
+    assert dict(remeha_modbus_unit.holding) == before
+
+
+@pytest.mark.asyncio
+async def test_repair_invalid_schedules_overwrites_invalid(
+    gtw_08: GTW08, remeha_modbus_unit: MockModbusUnit
+):
+    """Only invalid day schedules are overwritten with the default heating schedule."""
+
+    invalid = [
+        day_schedule_address(1, ClimateZoneScheduleId.SCHEDULE_1, Weekday.MONDAY),
+        day_schedule_address(1, ClimateZoneScheduleId.SCHEDULE_3, Weekday.SUNDAY),
+    ]
+    for address in invalid:
+        corrupt_day_schedule(remeha_modbus_unit, address)
+
+    untouched_address = day_schedule_address(1, ClimateZoneScheduleId.SCHEDULE_2, Weekday.MONDAY)
+    untouched = read_day_schedule(remeha_modbus_unit, untouched_address)
+
+    assert await gtw_08.async_repair_invalid_schedules() == len(invalid)
+
+    default_bytes = b"\x01" + Timeslot.create_default(False).encode() + bytes(16)
+    for address in invalid:
+        assert read_day_schedule(remeha_modbus_unit, address) == default_bytes
+    assert read_day_schedule(remeha_modbus_unit, untouched_address) == untouched
+
+    assert await gtw_08.async_repair_invalid_schedules() == 0
+
+
+@pytest.mark.asyncio
+async def test_repair_invalid_schedules_dhw_default(
+    gtw_08: GTW08, remeha_modbus_unit: MockModbusUnit
+):
+    """A DHW zone gets a DHW default slot."""
+
+    remeha_modbus_unit.holding[640] = ClimateZoneType.DHW
+    address = day_schedule_address(1, ClimateZoneScheduleId.SCHEDULE_1, Weekday.FRIDAY)
+    corrupt_day_schedule(remeha_modbus_unit, address)
+
+    assert await gtw_08.async_repair_invalid_schedules() == 1
+
+    assert read_day_schedule(remeha_modbus_unit, address) == (
+        b"\x01" + Timeslot.create_default(True).encode() + bytes(16)
+    )
+
+
+@pytest.mark.asyncio
+async def test_repair_invalid_schedules_checks_all_zones(
+    gtw_08: GTW08, remeha_modbus_unit: MockModbusUnit
+):
+    """Schedules of every zone are inspected."""
+
+    address = day_schedule_address(2, ClimateZoneScheduleId.SCHEDULE_1, Weekday.MONDAY)
+    corrupt_day_schedule(remeha_modbus_unit, address)
+
+    assert await gtw_08.async_repair_invalid_schedules() == 1
