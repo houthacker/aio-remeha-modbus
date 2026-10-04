@@ -12,6 +12,9 @@ from modbus_connection import ModbusUnit
 from modbus_connection.mock import MockModbusUnit
 
 from aio_remeha_modbus.gtw08 import GTW08
+from aio_remeha_modbus.gtw08.const import ClimateZoneScheduleId, Weekday
+from aio_remeha_modbus.helpers.fields import decode_bytes, encode_bytes
+from aio_remeha_modbus.helpers.gtw08 import day_schedule_start_address
 
 TESTING_TIME_ZONE: Final[str] = "Europe/Amsterdam"
 
@@ -61,6 +64,23 @@ def load_modbus_store(unit: MockModbusUnit, file_name: str = "modbus_store.json"
     """Load a recorded register store into the mock unit."""
     store: dict[str, str] = json_fixture(file_name)["server"]["registers"]
     unit.load_raw({"holding": {int(key): int(value, 16) for key, value in store.items()}})
+
+
+def day_schedule_address(zone_id: int, schedule_id: ClimateZoneScheduleId, day: Weekday) -> int:
+    """Return the absolute address of a day schedule."""
+
+    return 689 + day_schedule_start_address(zone_id, schedule_id, day)
+
+
+def read_day_schedule(unit: MockModbusUnit, address: int) -> bytes:
+    return decode_bytes([unit.holding.get(address + offset, 0) for offset in range(10)])
+
+
+def corrupt_day_schedule(unit: MockModbusUnit, address: int) -> None:
+    """Write a schedule with one slot that has an unknown activity byte."""
+
+    for offset, word in enumerate(encode_bytes(bytes.fromhex("01 ff 10 24") + bytes(16))):
+        unit.holding[address + offset] = word
 
 
 @pytest.fixture
