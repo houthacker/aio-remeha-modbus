@@ -163,4 +163,4 @@ class ISystemClimateZoneC(ISystemClimateZoneBase):
 type ClimateZone = (
     ClimateZoneA | ClimateZoneB | ISystemClimateZoneA | ISystemClimateZoneB | ISystemClimateZoneC
 )
-"""Union type of all base climate zone implementations."""
+"""Union type of all climate zone implementations."""
