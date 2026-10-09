@@ -3,6 +3,8 @@
 from enum import IntEnum, IntFlag, auto
 from typing import Protocol
 
+from aio_remeha_modbus.model.const import ZoneScheduleId
+
 
 class Capabilities(IntFlag):
     """Describe the capabilities of a zone."""
@@ -104,14 +106,33 @@ class Zone(Protocol):
     def current_activity(self) -> ZoneActivity:
         """The zone activity currently performed by the appliance."""
 
+    @property
     def capabilities(self) -> Capabilities:
-        """Return the capabilities of this zone."""
+        """The capabilities of this zone."""
 
+    @property
     def zone_type(self) -> ZoneType:
-        """Return the type of this zone."""
+        """The type of this zone."""
+
+    @property
+    def selected_schedule(self) -> ZoneScheduleId:
+        """The selected zone schedule.
+
+        A schedule can be 'selected' here while the zone is running
+        in a different mode. To check if the zone is indeed following
+        the selected schedule, ``self.operating_mode`` must be `SCHEDULING`.
+
+        """
 
     async def async_set_current_setpoint(self, setpoint: float) -> None:
         """Set the target temperature for this zone."""
 
     async def async_set_operating_mode(self, mode: OperatingMode) -> None:
         """Set the operating mode for this zone."""
+
+    async def async_set_selected_schedule(self, schedule: ZoneScheduleId) -> None:
+        """Set the selected schedule for this zone.
+
+        To ensure the zone will follow the schedule, ``self.operating_mode`` must
+        be set to `SCHEDULING`.
+        """
