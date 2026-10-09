@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from aio_remeha_modbus.model.appliance import Appliance
-from aio_remeha_modbus.model.climate import Zone
+from aio_remeha_modbus.model.zone import Zone
 
 
 class Gateway(Protocol):
