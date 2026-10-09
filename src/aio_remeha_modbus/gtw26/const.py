@@ -50,6 +50,7 @@ WEEKDAY_FIELDS: Final[tuple[str, ...]] = (
 BASE_WINDOWS: Final[tuple[tuple[int, int], ...]] = (
     (1, 63),
     (64, 127),
+    (231, 233),
     (251, 254),
     (384, 447),
     (448, 472),

@@ -157,7 +157,7 @@ async def test_base_poll_read_count_is_pinned(
     report = await diematic.async_update()
 
     assert report.complete
-    assert len(mock_modbus_unit.read_events) == 8
+    assert len(mock_modbus_unit.read_events) == 9
 
 
 _BASE_READINGS_BUNDLES = {
