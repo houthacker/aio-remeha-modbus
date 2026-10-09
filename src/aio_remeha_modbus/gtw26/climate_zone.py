@@ -37,14 +37,14 @@ _ZONE_BC_MAX = snap_clamp(0.5, 50.0, 95.0)
 _ZONE_FROST = snap_clamp(0.5, 3.0, 20.0)
 
 
-class ClimateZone(Gtw26Component):
+class ClimateZoneBase(Gtw26Component):
     """Base-layout climate-zone component. The facade sets its designation."""
 
     register_ranges = BASE_WINDOWS
     designation: str
 
 
-class ClimateZoneA(ClimateZone):
+class ClimateZoneA(ClimateZoneBase):
     """Base-layout climate zone A."""
 
     room_temperature = float10(18, unit="°C")
@@ -58,7 +58,7 @@ class ClimateZoneA(ClimateZone):
     frost_protection_target = float10(16, writable=_ZONE, force_fc16=True, unit="°C")
 
 
-class ClimateZoneB(ClimateZone):
+class ClimateZoneB(ClimateZoneBase):
     """Base-layout climate zone B."""
 
     room_temperature = float10(27, unit="°C")
@@ -75,14 +75,14 @@ class ClimateZoneB(ClimateZone):
     frost_protection_target = float10(25, writable=_ZONE, force_fc16=True, unit="°C")
 
 
-class ISystemClimateZone(Gtw26Component):
+class ISystemClimateZoneBase(Gtw26Component):
     """iSystem climate-zone base. The facade sets its A, B, or C designation."""
 
     register_ranges = ISYSTEM_WINDOWS
     designation: str
 
 
-class ISystemClimateZoneA(ISystemClimateZone):
+class ISystemClimateZoneA(ISystemClimateZoneBase):
     """iSystem climate zone A."""
 
     room_temperature = float10(614, unit="°C")
@@ -106,7 +106,7 @@ class ISystemClimateZoneA(ISystemClimateZone):
     frost_protection_target = float10(652, writable=_ZONE_FROST, force_fc16=True, unit="°C")
 
 
-class ISystemClimateZoneB(ISystemClimateZone):
+class ISystemClimateZoneB(ISystemClimateZoneBase):
     """iSystem climate zone B."""
 
     room_temperature = float10(616, unit="°C")
@@ -135,7 +135,7 @@ class ISystemClimateZoneB(ISystemClimateZone):
     frost_protection_target = float10(658, writable=_ZONE_FROST, force_fc16=True, unit="°C")
 
 
-class ISystemClimateZoneC(ISystemClimateZone):
+class ISystemClimateZoneC(ISystemClimateZoneBase):
     """iSystem climate zone C."""
 
     room_temperature = float10(618, unit="°C")
@@ -158,3 +158,9 @@ class ISystemClimateZoneC(ISystemClimateZone):
     comfort_target = float10(664, writable=_ZONE_DAY, force_fc16=True, unit="°C")
     reduced_target = float10(665, writable=_ZONE_NIGHT, force_fc16=True, unit="°C")
     frost_protection_target = float10(666, writable=_ZONE_FROST, force_fc16=True, unit="°C")
+
+
+type ClimateZone = (
+    ClimateZoneA | ClimateZoneB | ISystemClimateZoneA | ISystemClimateZoneB | ISystemClimateZoneC
+)
+"""Union type of all base climate zone implementations."""

@@ -18,7 +18,6 @@ from aio_remeha_modbus.gtw26.climate_zone import (
     ClimateZone,
     ClimateZoneA,
     ClimateZoneB,
-    ISystemClimateZone,
     ISystemClimateZoneA,
     ISystemClimateZoneB,
     ISystemClimateZoneC,
@@ -172,7 +171,7 @@ class GTW26(Device):
 
         self.sensors: Sensors | ISystemSensors | None = None
         self.hot_water: HotWater | ISystemHotWater | None = None
-        self.climate_zones: dict[str, ClimateZone | ISystemClimateZone] = {}
+        self.climate_zones: dict[str, ClimateZone] = {}
         self.settings: Settings | ISystemSettings | None = None
         self.config: Config | None = None
         self.diagnostics: Diagnostics | None = None
@@ -296,7 +295,7 @@ class GTW26(Device):
         """Construct the base-layout components and register bundles."""
         self.sensors = Sensors(self._unit)
         self.hot_water = HotWater(self._unit)
-        zones: dict[str, ClimateZone | ISystemClimateZone] = {
+        zones: dict[str, ClimateZone] = {
             "A": ClimateZoneA(self._unit),
             "B": ClimateZoneB(self._unit),
         }
@@ -325,7 +324,7 @@ class GTW26(Device):
         """Construct the iSystem-layout components and register bundles."""
         self.sensors = ISystemSensors(self._unit)
         self.hot_water = ISystemHotWater(self._unit)
-        zones: dict[str, ClimateZone | ISystemClimateZone] = {
+        zones: dict[str, ClimateZone] = {
             "A": ISystemClimateZoneA(self._unit),
             "B": ISystemClimateZoneB(self._unit),
             "C": ISystemClimateZoneC(self._unit),
