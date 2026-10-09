@@ -3,12 +3,8 @@
 from typing import Protocol
 
 
-class Appliance(Protocol):
-    """The main device that controls the available climate zones.
-
-    Examples are a heat pump, condensing boiler, combi boiler or
-    a furnace.
-    """
+class CoolingSettings(Protocol):
+    """Cooling settings at ``Appliance`` scope."""
 
     @property
     def forced_cooling_mode(self) -> bool:
@@ -25,16 +21,32 @@ class Appliance(Protocol):
         """
 
     async def async_enable_forced_cooling_mode(self) -> None:
-        """Put the appliance in forced cooling mode.
-
-        Raises:
-          ``RemehaApiError`` if the appliance does not support cooling.
-
-        """
+        """Put the appliance in forced cooling mode."""
 
     async def async_disable_forced_cooling_mode(self) -> None:
         """Get the appliance out of forced cooling mode.
 
         If forced cooling has been disabled, the appliance can still cool
-        but is itn't forced to do so for supporting climate zones.
+        but it isn't forced to do so for supporting climate zones.
+
+        However, the appliance might require a minimal (outside) temperature before
+        zones are allowed to cool in this case.
+        """
+
+
+class Appliance(Protocol):
+    """The main device that controls the available climate zones.
+
+    Examples are a heat pump, condensing boiler, combi boiler or
+    a furnace.
+    """
+
+    @property
+    def cooling(self) -> CoolingSettings | None:
+        """The cooling settings of this appliance.
+
+        Returns:
+            ``CoolingSettings | None``: The cooling settings, or `None` if the appliance
+                does not support cooling.
+
         """
