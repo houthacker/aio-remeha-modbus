@@ -397,7 +397,7 @@ class Appliance(RemehaComponent):
     pump_speed = uint16(address=459, scale=0.1, unit="%")
     """Current pump speed in percent."""
 
-    actual_produced_power = uint32(address=460, scale=0.01, unit="kWh", nan=0xFFFFFFFF)
+    actual_produced_power = uint32(address=460, scale=0.01, unit="W", nan=0xFFFFFFFF)
     """Signal used to capture actual power calculation."""
 
     cop_calculated = uint16(address=462, scale=0.001)
