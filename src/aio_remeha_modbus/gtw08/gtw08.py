@@ -24,6 +24,7 @@ from aio_remeha_modbus.gtw08.buffer_tank import BufferTank
 from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
     ClimateZoneFunction,
+    ClimateZoneType,
     get_default_timeslot_activity,
 )
 from aio_remeha_modbus.gtw08.const import (
@@ -258,7 +259,10 @@ class GTW08(Device):
             )
 
             default_slot = Timeslot.create_default(
-                get_default_timeslot_activity(zone_type=zone_type, zone_function=zone_function)
+                get_default_timeslot_activity(
+                    zone_type=ClimateZoneType(zone_type),
+                    zone_function=ClimateZoneFunction(zone_function),
+                )
             )
 
             for schedule_id in ClimateZoneScheduleId:
