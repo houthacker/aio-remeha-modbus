@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.14"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -571,11 +571,11 @@ wheels = [
 
 [[package]]
 name = "modbus-connection"
-version = "4.12.2"
+version = "4.12.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/27/12/14521438fbdd36f841878ab2d62d58e2a0a2af820ded72b01a77e502767d/modbus_connection-4.12.2.tar.gz", hash = "sha256:8c9e6f8ca2c4b091ec40f8f572afa4aeb64e678cc7adb6598a288d2f36a9fa96", size = 277918, upload-time = "2026-09-25T06:58:54.62Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/13/f7338f692f4ca5c9d5206e47d7ac4fdf358e45fc28445b7d223a08342151/modbus_connection-4.12.3.tar.gz", hash = "sha256:252213d5dac1fc7b2aadcb7fd105cf3657f6432225ae42c9c15eb84d62b9fb6d", size = 278311, upload-time = "2026-09-28T09:07:34.5Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/23/3a64554645a981f71886bd19ad266e620528201b6d7e59aa3d3a68832f29/modbus_connection-4.12.2-py3-none-any.whl", hash = "sha256:ec05f849be02dbc9773f9911f3d3d3e4c5d8aa3215dbc62abcd1e69d467c486c", size = 86600, upload-time = "2026-09-25T06:58:53.252Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/5b/70976163d4b17ac645d3fb576a515ae08170bffc274b3e114178839d45a9/modbus_connection-4.12.3-py3-none-any.whl", hash = "sha256:3389426f0e71867e84cf74300439e268a4aa7bfefe798a608d04994e1483b9e6", size = 86603, upload-time = "2026-09-28T09:07:32.31Z" },
 ]
 
 [package.optional-dependencies]
