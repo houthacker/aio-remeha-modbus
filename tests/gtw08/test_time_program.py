@@ -84,13 +84,13 @@ def test_timeslot_decode_unknown_values():
 
 
 @pytest.mark.parametrize(
-    ("is_dhw", "activity"),
-    [(True, TimeslotActivity.DHW), (False, TimeslotActivity.HEAT_COOL)],
+    "activity",
+    list(TimeslotActivity),
 )
-def test_timeslot_create_default(is_dhw: bool, activity: TimeslotActivity):
+def test_timeslot_create_default(activity: TimeslotActivity):
     """Test the default timeslot for both zone kinds."""
 
-    default = Timeslot.create_default(is_dhw=is_dhw)
+    default = Timeslot.create_default(activity=activity)
 
     assert default.activity is activity
     assert default.setpoint_type is TimeslotSetpointType.ECO

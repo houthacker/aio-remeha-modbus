@@ -25,8 +25,9 @@ from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
 class TimeslotActivity(IntEnum):
     """The type of activity that must run during the containing TimeSlot."""
 
-    HEAT_COOL = int("c8", 16)
-    DHW = int("00", 16)
+    HEAT_COOL = 0xC8
+    DHW = 0x00
+    DHW_PRIMARY = 0x0A
 
 
 class TimeslotSetpointType(IntEnum):
@@ -88,7 +89,7 @@ class Timeslot:
         return f"Timeslot(setpoint_type={self.setpoint_type.name}, activity={self.activity.name}, switch_time={self.switch_time})"
 
     @classmethod
-    def create_default(cls, is_dhw: bool) -> Self:
+    def create_default(cls, activity: TimeslotActivity) -> Self:
         """Create a default `Timeslot`.
 
         A default time slot is used to repair an issue where the zone schedule cannot
@@ -97,7 +98,7 @@ class Timeslot:
         the data has been corrupted in transit or on the GTW-08.
 
         Args:
-            is_dhw (bool): Whether this schedule is for a DHW zone.
+            activity (TimeslotActivity): The required activity type.
 
         Returns:
             The time slot.
@@ -106,7 +107,7 @@ class Timeslot:
 
         return cls(
             setpoint_type=TimeslotSetpointType.ECO,
-            activity=(TimeslotActivity.DHW if is_dhw else TimeslotActivity.HEAT_COOL),
+            activity=activity,
             switch_time=time(hour=0),
         )
 
