@@ -27,7 +27,7 @@ class TimeslotActivity(IntEnum):
 
     HEAT_COOL = 0xC8
     DHW = 0x00
-    DHW_PRIMARY = 0x0A
+    DHW_PRIMARY = 0xA0
 
 
 class TimeslotSetpointType(IntEnum):
