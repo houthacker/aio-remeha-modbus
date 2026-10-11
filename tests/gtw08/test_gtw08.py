@@ -457,7 +457,9 @@ async def test_repair_invalid_schedules_overwrites_invalid(
 
     assert await gtw_08.async_repair_invalid_schedules() == len(invalid)
 
-    default_bytes = b"\x01" + Timeslot.create_default(False).encode() + bytes(16)
+    default_bytes = (
+        b"\x01" + Timeslot.create_default(TimeslotActivity.HEAT_COOL).encode() + bytes(16)
+    )
     for address in invalid:
         assert read_day_schedule(remeha_modbus_unit, address) == default_bytes
     assert read_day_schedule(remeha_modbus_unit, untouched_address) == untouched
@@ -478,7 +480,7 @@ async def test_repair_invalid_schedules_dhw_default(
     assert await gtw_08.async_repair_invalid_schedules() == 1
 
     assert read_day_schedule(remeha_modbus_unit, address) == (
-        b"\x01" + Timeslot.create_default(True).encode() + bytes(16)
+        b"\x01" + Timeslot.create_default(TimeslotActivity.DHW).encode() + bytes(16)
     )
 
 
