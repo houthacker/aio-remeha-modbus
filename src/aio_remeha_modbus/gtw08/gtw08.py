@@ -24,8 +24,7 @@ from aio_remeha_modbus.gtw08.buffer_tank import BufferTank
 from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
     ClimateZoneFunction,
-    ClimateZoneType,
-    is_domestic_hot_water,
+    get_default_timeslot_activity,
 )
 from aio_remeha_modbus.gtw08.const import (
     REMEHA_MAX_SPAN,
@@ -40,9 +39,14 @@ from aio_remeha_modbus.gtw08.system_discovery_table import (
     DeviceBoardType,
     SystemDiscoveryTable,
 )
-from aio_remeha_modbus.gtw08.time_program import DaySchedule, Timeslot
+from aio_remeha_modbus.gtw08.time_program import (
+    DaySchedule,
+    Timeslot,
+)
 from aio_remeha_modbus.helpers.fields import decode_bytes, uint8
-from aio_remeha_modbus.helpers.gtw08 import day_schedule_start_address
+from aio_remeha_modbus.helpers.gtw08 import (
+    day_schedule_start_address,
+)
 
 # Attribute names of syb-systems each update method reads.
 READINGS = ("main_control_monitoring", "appliance", "buffer_tank", "_zones")
@@ -254,9 +258,7 @@ class GTW08(Device):
             )
 
             default_slot = Timeslot.create_default(
-                is_domestic_hot_water(
-                    ClimateZoneType(zone_type), ClimateZoneFunction(zone_function)
-                )
+                get_default_timeslot_activity(zone_type=zone_type, zone_function=zone_function)
             )
 
             for schedule_id in ClimateZoneScheduleId:

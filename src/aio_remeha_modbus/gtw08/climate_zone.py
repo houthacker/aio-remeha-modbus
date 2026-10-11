@@ -20,7 +20,12 @@ from aio_remeha_modbus.gtw08.const import (
 )
 from aio_remeha_modbus.gtw08.errors import RemehaApiError
 from aio_remeha_modbus.gtw08.model import RemehaComponent
-from aio_remeha_modbus.gtw08.time_program import DaySchedule, TimeProgram, TimeslotSetpointType
+from aio_remeha_modbus.gtw08.time_program import (
+    DaySchedule,
+    TimeProgram,
+    TimeslotActivity,
+    TimeslotSetpointType,
+)
 from aio_remeha_modbus.helpers.fields import int16, nullable_binary, uint8, uint16
 from aio_remeha_modbus.helpers.gtw08 import (
     TimeOfDay,
@@ -173,6 +178,28 @@ def is_central_heating(type: ClimateZoneType, function: ClimateZoneFunction) -> 
         ClimateZoneType.CH_ONLY,
         ClimateZoneType.CH_AND_COOLING,
     } or (type == ClimateZoneType.OTHER and function == ClimateZoneFunction.MIXING_CIRCUIT)
+
+
+# Moving this to time_program.py (its preferred location) results in a cyclic dependency.
+def get_default_timeslot_activity(
+    zone_type: ClimateZoneType, zone_function: ClimateZoneFunction
+) -> TimeslotActivity:
+    """Determine the default time slot activity for the given climate zone data.
+
+    Args:
+        zone_type (ClimateZoneType): The zone type.
+        zone_function (ClimateZoneFunction): The zone function.
+
+    """
+
+    if is_domestic_hot_water(zone_type, zone_function):
+        match zone_function:
+            case ClimateZoneFunction.DHW_PRIMARY:
+                return TimeslotActivity.DHW_PRIMARY
+            case _:
+                return TimeslotActivity.DHW
+
+    return TimeslotActivity.HEAT_COOL
 
 
 class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
