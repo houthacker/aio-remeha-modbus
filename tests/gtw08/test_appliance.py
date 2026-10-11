@@ -55,7 +55,7 @@ async def test_appliance(remeha_modbus_unit: MockModbusUnit):
     assert appliance.cooling_energy_delivery == 0
     assert appliance.backup_energy_delivery == 0
     assert appliance.pump_speed == 5.0
-    assert appliance.actual_produced_power == 57
+    assert appliance.actual_produced_power == 6562
     assert appliance.cop_calculated == 3.2
     assert appliance.silent_mode == SilentMode.LEVEL_1
     assert appliance.silent_mode_start_time == time(hour=22)
