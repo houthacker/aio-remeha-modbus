@@ -104,6 +104,7 @@ class RetryingModbusUnit(ModbusUnit, _RetryStatistics):  # ruff: ignore[too-many
         self._unit = unit
 
     @property
+    @override
     def connected(self) -> bool:
         """Show whether this unit is connected to a modbus device."""
 

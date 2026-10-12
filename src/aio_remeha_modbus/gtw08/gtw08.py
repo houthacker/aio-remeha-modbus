@@ -5,7 +5,7 @@ import struct
 from dataclasses import dataclass
 from datetime import tzinfo
 from enum import Enum
-from typing import Any
+from typing import Any, override
 
 from modbus_connection import (
     GatewayPathUnavailableError,
@@ -179,6 +179,7 @@ class GTW08(Device):
             )
             raise
 
+    @override
     async def _async_setup(self) -> None:
         await self.discovery_table.async_update()
         await self.main_control_monitoring.async_update()

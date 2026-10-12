@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, tzinfo
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, override
 
 from dateutil import relativedelta
 from modbus_connection import ModbusUnit
@@ -767,6 +767,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await day_schedule.async_set_time_slots(time_slots)
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare this `ClimateZone` with another for equality.
 
@@ -783,6 +784,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         return False
 
+    @override
     def __hash__(self) -> int:
         """Return a hash of this zone."""
 

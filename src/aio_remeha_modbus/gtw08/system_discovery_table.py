@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 from functools import cached_property
+from typing import override
 
 from modbus_connection.model import repeating_group, uint32
 from pydantic.dataclasses import dataclass
@@ -60,6 +61,7 @@ class DeviceBoardCategory:
     generation: int
     """The category generation"""
 
+    @override
     def __str__(self) -> str:
         """Textual representation of this DeviceBoardCategory."""
 
@@ -76,6 +78,7 @@ class DeviceBoardCategory:
 
         return f"{name}-{self.generation}"
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare this `DeviceBoardCategory` to another for equality.
 
@@ -91,6 +94,7 @@ class DeviceBoardCategory:
 
         return False
 
+    @override
     def __hash__(self) -> int:
         """Return a hash of this device board category."""
 
@@ -167,6 +171,7 @@ class DeviceBoard(RemehaComponent):
 
         return False if self.board_category is None else self.board_category.type.is_mainboard()
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare this `DeviceInstance` with another for equality.
 
@@ -182,6 +187,7 @@ class DeviceBoard(RemehaComponent):
 
         return False
 
+    @override
     def __hash__(self) -> int:
         """Return a hash of this device instance."""
         return hash(self.board_category)
