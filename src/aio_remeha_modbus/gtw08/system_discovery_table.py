@@ -23,6 +23,9 @@ class DeviceBoardType(IntEnum):
     EHC = 2
     """Motherboard for (hybrid) heat pumps like Mercuria Ace"""
 
+    CU_HW = 5
+    """Motherboard for heat pump boilers like Azorra Ace"""
+
     MK = int("14", 16)
     """Appliance control panel like eTwist"""
 
@@ -45,6 +48,7 @@ class DeviceBoardType(IntEnum):
             DeviceBoardType.CU_GH,
             DeviceBoardType.CU_OH,
             DeviceBoardType.EHC,
+            DeviceBoardType.CU_HW,
             DeviceBoardType.EHC_ALT,
             DeviceBoardType.EEC,
         }
@@ -69,6 +73,8 @@ class DeviceBoardCategory:
                 name = "CU-GH"
             case DeviceBoardType.CU_OH:
                 name = "CU-OH"
+            case DeviceBoardType.CU_HW:
+                name = "CU-HW"
             case DeviceBoardType.GATEWAY:
                 name = "GTW"
             case _:

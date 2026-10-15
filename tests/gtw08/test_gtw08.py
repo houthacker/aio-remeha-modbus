@@ -38,7 +38,12 @@ from aio_remeha_modbus.gtw08.schedule import (
 )
 from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoardType
 from aio_remeha_modbus.helpers.fields import decode_bytes
-from tests.conftest import corrupt_day_schedule, day_schedule_address, read_day_schedule
+from tests.conftest import (
+    TESTING_TIME_ZONE,
+    corrupt_day_schedule,
+    day_schedule_address,
+    read_day_schedule,
+)
 
 
 @pytest.mark.asyncio
@@ -151,6 +156,25 @@ async def test_read_appliance(gtw_08: GTW08):
         | MonitoringStatus.APPLIANCE_PUMP_ON
         | MonitoringStatus.COOLING_ACTIVE
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+async def test_azorra_ace_support(remeha_modbus_unit: MockModbusUnit):
+    """Test support for Azorra Ace appliances."""
+
+    gtw_08 = GTW08("azorra_ace", unit=remeha_modbus_unit, time_zone=tz.gettz(TESTING_TIME_ZONE))
+    await gtw_08.async_update()
+
+    assert len(gtw_08.discovery_table.device_boards) == 2
+
+    mainboard = gtw_08.discovery_table.device_boards[0]
+    assert mainboard.is_mainboard()
+    assert mainboard.board_category.type is DeviceBoardType.CU_HW
+    assert mainboard.board_category.generation == 1
+
+    assert len(gtw_08.zones) == 1
+    assert gtw_08.zones[0].is_domestic_hot_water()
 
 
 @pytest.mark.asyncio
