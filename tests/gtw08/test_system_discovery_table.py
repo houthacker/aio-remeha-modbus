@@ -24,6 +24,7 @@ def test_device_board_category():
     assert str(DeviceBoardCategory(type=DeviceBoardType.CU_GH, generation=2)) == "CU-GH-2"
     assert str(DeviceBoardCategory(type=DeviceBoardType.CU_OH, generation=3)) == "CU-OH-3"
     assert str(DeviceBoardCategory(type=DeviceBoardType.EHC, generation=10)) == "EHC-10"
+    assert str(DeviceBoardCategory(type=DeviceBoardType.CU_HW, generation=1)) == "CU-HW-1"
     assert str(DeviceBoardCategory(type=DeviceBoardType.MK, generation=3)) == "MK-3"
     assert str(DeviceBoardCategory(type=DeviceBoardType.SCB, generation=17)) == "SCB-17"
     assert str(DeviceBoardCategory(type=DeviceBoardType.EEC, generation=2)) == "EEC-2"
@@ -52,6 +53,7 @@ def test_device_board_category_equality_ignores_generation():
         (DeviceBoardType.CU_GH, True),
         (DeviceBoardType.CU_OH, True),
         (DeviceBoardType.EHC, True),
+        (DeviceBoardType.CU_HW, True),
         (DeviceBoardType.EHC_ALT, True),
         (DeviceBoardType.EEC, True),
         (DeviceBoardType.MK, False),
