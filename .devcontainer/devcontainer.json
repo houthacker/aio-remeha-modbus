@@ -13,6 +13,7 @@
         "ms-python.python",
         "ms-python.pylint",
         "ms-python.vscode-python-envs",
+        "ms-python.mypy-type-checker",
         "charliermarsh.ruff",
         "redhat.vscode-yaml",
         "esbenp.prettier-vscode",
@@ -60,7 +61,12 @@
         "python.terminal.activateEnvInCurrentTerminal": true,
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "python.analysis.autoSearchPaths": false,
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "python.analysis.typeCheckingMode": "basic",
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "mypy-type-checker.run": "onType",
+        "mypy-type-checker.importStrategy": "fromEnvironment",
+        "mypy-type-checker.preferDaemon": true,
+        "mypy-type-checker.reportingScope": "workspace"
       }
     }
   },

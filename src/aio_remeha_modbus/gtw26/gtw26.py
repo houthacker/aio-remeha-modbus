@@ -4,7 +4,7 @@ import asyncio
 import struct
 from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Final
+from typing import Any, Final, override
 
 from modbus_connection import (
     ModbusConnectionError,
@@ -233,6 +233,7 @@ class GTW26(Device):
         """The detected or configured controller generation."""
         return self._generation
 
+    @override
     async def _async_setup(self) -> None:
         """Detect what is missing and construct the layout's register bundles.
 
@@ -353,6 +354,7 @@ class GTW26(Device):
             **{f"schedules.{name}": program for name, program in self.schedule.bundles().items()},
         }
 
+    @override
     async def async_ensure_setup(self) -> None:
         """Build the component set once, retrying after a failed setup.
 

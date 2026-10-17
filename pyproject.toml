@@ -61,6 +61,7 @@ fail_under = 95
 files = ["src"]
 python_version = "3.14"
 strict = true
+enable_error_code = ["explicit-override"]
 
 [tool.ruff]
 preview = true # Markdown formatting

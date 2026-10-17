@@ -84,6 +84,7 @@ class Timeslot:
 
         return False
 
+    @override
     def __str__(self) -> str:
         """Return a human-readable representation of this time slot."""
         return f"Timeslot(setpoint_type={self.setpoint_type.name}, activity={self.activity.name}, switch_time={self.switch_time})"
