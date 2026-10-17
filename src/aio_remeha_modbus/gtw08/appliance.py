@@ -32,6 +32,22 @@ class SilentMode(IntEnum):
     """Extra silent mode."""
 
 
+class BackupType(IntEnum):
+    """Defines the type of heat generation backup used in the heat pump."""
+
+    NO_BACKUP = 0
+    """The heat pump has no backup heat source."""
+
+    SINGLE_STAGE_ELECTRICAL = 1
+    """The heat pump has a single-phase electrical backup."""
+
+    DOUBLE_STAGE_ELECTRICAL = 2
+    """The heat pump has a two-phase electrical backup."""
+
+    BOILER = 3
+    """The boiler is the backup heat source."""
+
+
 class CoolingType(IntEnum):
     """Defines the type of cooling used by the appliance (if any)."""
 
@@ -420,6 +436,9 @@ class Appliance(RemehaComponent):
     cop_calculated = uint16(address=462, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) (parameter HM031)."""
 
+    backup_type = enum(address=482, enum_type=BackupType, signed=False, nan=0xFF, writable=True)
+    """The type of backup heat source for the heat pump."""
+
     silent_mode = enum(address=490, enum_type=SilentMode, signed=False, nan=0xFF, writable=True)
     """The silent mode level of the appliance."""
 
@@ -451,6 +470,8 @@ class Appliance(RemehaComponent):
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) on a hybrid system (parameter HM031)."""
 
+    _unsupported_backup_types: set[BackupType] = set()
+
     def restrict_fields_for_device(self, device: DeviceBoard) -> None:
         """Ensure that only fields supported by `device` can be read and written.
 
@@ -469,6 +490,10 @@ class Appliance(RemehaComponent):
 
         match board_category.type:
             case DeviceBoardType.CU_HW:
+                # Azorra Ace does not support a two-phase electrical backup.
+                self._unsupported_backup_types.add(BackupType.DOUBLE_STAGE_ELECTRICAL)
+
+                # Restrict other sensors that are not supported.
                 self.restrict_fields([
                     name
                     for name, _ in inspect.getmembers_static(
@@ -524,6 +549,26 @@ class Appliance(RemehaComponent):
         """Do not force summer mode."""
 
         await self.write("forced_summer_mode", False)
+
+    async def async_set_backup_type(self, backup_type: BackupType) -> None:
+        """Set the backup type for this appliance.
+
+        Not all appliances support all backup types. For instance, a heat pump boiler
+        like Azorra Ace does not support a 2-stage electrical backup.
+        Attempting to set such a backup type raises an error.
+
+        Args:
+            backup_type(BackupType): The new backup type for this appliance.
+
+        Raises:
+            `ValueError` if an unsupported `BackupType` is provided.
+
+        """
+
+        if backup_type in self._unsupported_backup_types:
+            raise ValueError(f"Appliance does not support backup type {backup_type.name}")
+
+        await self.write("backup_type", backup_type)
 
     async def async_set_silent_mode(self, value: SilentMode) -> None:
         """Set the silent mode level.
