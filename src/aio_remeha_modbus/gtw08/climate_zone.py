@@ -323,7 +323,10 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Whether the zone pump is currently running"""
 
     dhw_tank_temperature = int16(address=1119, scale=0.01, unit="°C")
-    """The current DHW tank temperature"""
+    """The current DHW tank temperature (bottom sensor)"""
+
+    dhw_tank_temperature_top = int16(address=1120, scale=0.01, unit="°C")
+    """The current DHW tank temperature (top sensor)"""
 
     id: int
     """The one-based sequence id of this zone."""
