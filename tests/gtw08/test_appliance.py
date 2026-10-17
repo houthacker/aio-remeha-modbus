@@ -13,6 +13,15 @@ from aio_remeha_modbus.gtw08.appliance import (
     SeasonalMode,
     SilentMode,
 )
+from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoard, DeviceBoardType
+
+_CU_HW_UNSUPPORTED_FIELDS = (
+    "outside_temperature",
+    "flow_temperature",
+    "return_temperature",
+    "heat_pump_flow_temperature",
+    "heat_pump_return_temperature",
+)
 
 
 @pytest.mark.asyncio
@@ -277,3 +286,50 @@ async def test_appliance_nan_values(remeha_modbus_unit: MockModbusUnit):
     assert appliance.silent_mode is None
     assert appliance.silent_mode_start_time is None
     assert appliance.is_cooling_required() is False
+
+
+async def _restricted_appliance(unit: MockModbusUnit) -> Appliance:
+    """Create an appliance restricted to the unit's mainboard and read its values."""
+
+    device_board = DeviceBoard(unit=unit)
+    await device_board.async_update()
+
+    appliance = Appliance(unit)
+    appliance.restrict_fields_for_device(device_board)
+    await appliance.async_update()
+
+    return appliance
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+async def test_appliance_restrict_fields_for_cu_hw(remeha_modbus_unit: MockModbusUnit):
+    """Test that fields unsupported by a CU-HW mainboard read as `None`."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert all(getattr(appliance, name) is None for name in _CU_HW_UNSUPPORTED_FIELDS)
+    assert appliance.silent_mode == SilentMode.LEVEL_1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "board_type",
+    [
+        pytest.param(board_type, id=board_type.name)
+        for board_type in DeviceBoardType
+        if board_type != DeviceBoardType.CU_HW
+    ],
+)
+async def test_appliance_restrict_fields_for_other_boards(
+    remeha_modbus_unit: MockModbusUnit, board_type: DeviceBoardType
+):
+    """Test that all fields remain available for non CU-HW mainboards."""
+
+    # Keep the generation in the low byte, replace the board type in the high byte.
+    remeha_modbus_unit.holding[129] = (board_type << 8) | (remeha_modbus_unit.holding[129] & 0xFF)
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert all(getattr(appliance, name) is not None for name in _CU_HW_UNSUPPORTED_FIELDS)
+    assert appliance.silent_mode == SilentMode.LEVEL_1
