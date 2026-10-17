@@ -569,8 +569,10 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         if self.is_central_heating():
             return max_setpoint or Limits.CH_MAX_TEMP
 
-        assert self.is_domestic_hot_water()
-        return max_setpoint or Limits.DHW_MAX_TEMP
+        if self.is_domestic_hot_water():
+            return max_setpoint or Limits.DHW_MAX_TEMP
+
+        return max_setpoint or min(Limits.CH_MAX_TEMP, Limits.DHW_MAX_TEMP)
 
     @property
     def min_temp(self) -> float:
