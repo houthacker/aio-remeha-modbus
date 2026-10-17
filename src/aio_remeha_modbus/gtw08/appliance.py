@@ -470,7 +470,7 @@ class Appliance(RemehaComponent):
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) on a hybrid system (parameter HM031)."""
 
-    _unsupported_backup_types: set[BackupType] = set()
+    _unsupported_backup_types: set[BackupType]
 
     def restrict_fields_for_device(self, device: DeviceBoard) -> None:
         """Ensure that only fields supported by `device` can be read and written.
@@ -491,7 +491,7 @@ class Appliance(RemehaComponent):
         match board_category.type:
             case DeviceBoardType.CU_HW:
                 # Azorra Ace does not support a two-phase electrical backup.
-                self._unsupported_backup_types.add(BackupType.DOUBLE_STAGE_ELECTRICAL)
+                self._unsupported_backup_types = {BackupType.DOUBLE_STAGE_ELECTRICAL}
 
                 # Restrict other sensors that are not supported.
                 self.restrict_fields([
@@ -508,6 +508,7 @@ class Appliance(RemehaComponent):
 
         # By default, keep all fields. If restrict_fields_for_device is called multiple times,
         # restricted fields are not overwritten.
+        self._unsupported_backup_types = set()
 
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.
