@@ -1,12 +1,22 @@
 """Implementation of appliance-scoped functionality."""
 
+import inspect
 from datetime import time
 from enum import IntEnum
 
-from modbus_connection.model import boolean, enum, uint32
+from modbus_connection import ModbusUnit
+from modbus_connection.model import (
+    CoilField,
+    DiscreteInputField,
+    RegisterField,
+    boolean,
+    enum,
+    uint32,
+)
 
 from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, SeasonalMode
 from aio_remeha_modbus.gtw08.model import RemehaComponent
+from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoard, DeviceBoardType
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
 
 
@@ -21,6 +31,22 @@ class SilentMode(IntEnum):
 
     LEVEL_2 = 2
     """Extra silent mode."""
+
+
+class BackupType(IntEnum):
+    """Defines the type of heat generation backup used in the heat pump."""
+
+    NO_BACKUP = 0
+    """The heat pump has no backup heat source."""
+
+    SINGLE_STAGE_ELECTRICAL = 1
+    """The heat pump has a single-phase electrical backup."""
+
+    DOUBLE_STAGE_ELECTRICAL = 2
+    """The heat pump has a two-phase electrical backup."""
+
+    BOILER = 3
+    """The boiler is the backup heat source."""
 
 
 class CoolingType(IntEnum):
@@ -297,6 +323,14 @@ class Appliance(RemehaComponent):
     the other available api types, like appliance error status or burning hours counters.
     """
 
+    _cu_hw_board_unsupported_fields: set[str] = {
+        "outside_temperature",
+        "flow_temperature",
+        "return_temperature",
+        "heat_pump_flow_temperature",
+        "heat_pump_return_temperature",
+    }
+
     max_span = REMEHA_MAX_SPAN
     register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9230, 9230))
 
@@ -403,6 +437,9 @@ class Appliance(RemehaComponent):
     cop_calculated = uint16(address=462, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) (parameter HM031)."""
 
+    backup_type = enum(address=482, enum_type=BackupType, signed=False, nan=0xFF, writable=True)
+    """The type of backup heat source for the heat pump."""
+
     silent_mode = enum(address=490, enum_type=SilentMode, signed=False, nan=0xFF, writable=True)
     """The silent mode level of the appliance."""
 
@@ -433,6 +470,50 @@ class Appliance(RemehaComponent):
     # TODO This is a register for hybrid appliances. If more are required, move to dedicated class.
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) on a hybrid system (parameter HM031)."""
+
+    _unsupported_backup_types: set[BackupType]
+
+    def __init__(
+        self, unit: ModbusUnit, index: int = 1, *, base_offset: int = 0, _instance_offset: int = 0
+    ) -> None:
+        """Create a new ``Appliance`` instance."""
+
+        super().__init__(unit, index, base_offset=base_offset, _instance_offset=_instance_offset)
+        self._unsupported_backup_types = set()
+
+    def restrict_fields_for_device(self, device: DeviceBoard) -> None:
+        """Ensure that only fields supported by `device` can be read and written.
+
+        This method assumes it is called once, on gateway setup.
+
+        Args:
+            device (DeviceBoard): The device to restrict field availability by.
+
+        """
+
+        board_category = device.board_category
+        if not board_category or not board_category.type:
+            # Keep all fields. If restrict_fields_for_device is called multiple times,
+            # restricted fields are not overwritten.
+            return
+
+        match board_category.type:
+            case DeviceBoardType.CU_HW:
+                # Azorra Ace does not support a two-phase electrical backup.
+                self._unsupported_backup_types.add(BackupType.DOUBLE_STAGE_ELECTRICAL)
+
+                # Restrict other sensors that are not supported.
+                self.restrict_fields([
+                    name
+                    for name, _ in inspect.getmembers_static(
+                        Appliance,
+                        lambda member: (
+                            (isinstance(member, (RegisterField, CoilField, DiscreteInputField)))
+                            and member.name not in self._cu_hw_board_unsupported_fields
+                        ),
+                    )
+                ])
+                return
 
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.
@@ -474,6 +555,26 @@ class Appliance(RemehaComponent):
         """Do not force summer mode."""
 
         await self.write("forced_summer_mode", False)
+
+    async def async_set_backup_type(self, backup_type: BackupType) -> None:
+        """Set the backup type for this appliance.
+
+        Not all appliances support all backup types. For instance, a heat pump boiler
+        like Azorra Ace does not support a 2-stage electrical backup.
+        Attempting to set such a backup type raises an error.
+
+        Args:
+            backup_type(BackupType): The new backup type for this appliance.
+
+        Raises:
+            `ValueError` if an unsupported `BackupType` is provided.
+
+        """
+
+        if backup_type in self._unsupported_backup_types:
+            raise ValueError(f"Appliance does not support backup type {backup_type.name}")
+
+        await self.write("backup_type", backup_type)
 
     async def async_set_silent_mode(self, value: SilentMode) -> None:
         """Set the silent mode level.

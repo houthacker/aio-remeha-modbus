@@ -3,16 +3,39 @@
 from datetime import time
 
 import pytest
-from modbus_connection.mock import MockModbusUnit
+from modbus_connection.mock import MockModbusConnection, MockModbusUnit
 
 from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
     ApplianceStatus,
     ApplianceSubStatus,
+    BackupType,
     CoolingType,
     SeasonalMode,
     SilentMode,
 )
+from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoard, DeviceBoardType
+from tests.conftest import load_modbus_store
+
+_CU_HW_UNSUPPORTED_FIELDS = (
+    "outside_temperature",
+    "flow_temperature",
+    "return_temperature",
+    "heat_pump_flow_temperature",
+    "heat_pump_return_temperature",
+)
+
+_OTHER_BOARD_TYPES = [
+    pytest.param(board_type, id=board_type.name)
+    for board_type in DeviceBoardType
+    if board_type != DeviceBoardType.CU_HW
+]
+
+
+def _set_board_type(unit: MockModbusUnit, board_type: DeviceBoardType) -> None:
+    """Replace the mainboard type in the high byte, keeping the generation in the low byte."""
+
+    unit.holding[129] = (board_type << 8) | (unit.holding[129] & 0xFF)
 
 
 @pytest.mark.asyncio
@@ -268,12 +291,162 @@ async def test_appliance_nan_values(remeha_modbus_unit: MockModbusUnit):
     remeha_modbus_unit.holding[420] = 0xFFFF  # generator_starts_total (low word)
     remeha_modbus_unit.holding[490] = 0xFF  # silent_mode
     remeha_modbus_unit.holding[491] = 0xFF  # silent_mode_start_time
+    remeha_modbus_unit.holding[482] = 0xFF  # backup_type
 
     appliance = await _updated_appliance(remeha_modbus_unit)
 
+    assert appliance.backup_type is None
     assert appliance.season_mode is None
     assert appliance.forced_cooling_mode is None
     assert appliance.generator_starts_total is None
     assert appliance.silent_mode is None
     assert appliance.silent_mode_start_time is None
     assert appliance.is_cooling_required() is False
+
+
+async def _restricted_appliance(unit: MockModbusUnit) -> Appliance:
+    """Create an appliance restricted to the unit's mainboard and read its values."""
+
+    device_board = DeviceBoard(unit=unit)
+    await device_board.async_update()
+
+    appliance = Appliance(unit)
+    appliance.restrict_fields_for_device(device_board)
+    await appliance.async_update()
+
+    return appliance
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+async def test_appliance_restrict_fields_for_cu_hw(remeha_modbus_unit: MockModbusUnit):
+    """Test that fields unsupported by a CU-HW mainboard read as `None`."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert all(getattr(appliance, name) is None for name in _CU_HW_UNSUPPORTED_FIELDS)
+    assert appliance.silent_mode == SilentMode.LEVEL_1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("board_type", _OTHER_BOARD_TYPES)
+async def test_appliance_restrict_fields_for_other_boards(
+    remeha_modbus_unit: MockModbusUnit, board_type: DeviceBoardType
+):
+    """Test that all fields remain available for non CU-HW mainboards."""
+
+    _set_board_type(remeha_modbus_unit, board_type)
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert all(getattr(appliance, name) is not None for name in _CU_HW_UNSUPPORTED_FIELDS)
+    assert appliance.silent_mode == SilentMode.LEVEL_1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("remeha_modbus_unit", "expected"),
+    [
+        pytest.param("azorra_ace_store.json", BackupType.SINGLE_STAGE_ELECTRICAL, id="CU_HW"),
+        pytest.param("modbus_store.json", BackupType.DOUBLE_STAGE_ELECTRICAL, id="EHC"),
+    ],
+    indirect=["remeha_modbus_unit"],
+)
+async def test_appliance_read_backup_type(remeha_modbus_unit: MockModbusUnit, expected: BackupType):
+    """Test that the backup type is read."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert appliance.backup_type == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+@pytest.mark.parametrize(
+    "backup_type",
+    [
+        pytest.param(backup_type, id=backup_type.name)
+        for backup_type in BackupType
+        if backup_type != BackupType.DOUBLE_STAGE_ELECTRICAL
+    ],
+)
+async def test_appliance_set_backup_type_cu_hw(
+    remeha_modbus_unit: MockModbusUnit, backup_type: BackupType
+):
+    """Test that a CU-HW mainboard accepts all backup types except a double stage electrical one."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    await appliance.async_set_backup_type(backup_type)
+
+    assert remeha_modbus_unit.holding[482] == backup_type.value
+    await appliance.async_update()
+    assert appliance.backup_type == backup_type
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+async def test_appliance_set_backup_type_cu_hw_rejects_double_stage_electrical(
+    remeha_modbus_unit: MockModbusUnit,
+):
+    """Test that a CU-HW mainboard rejects a double stage electrical backup type."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    with pytest.raises(ValueError, match="DOUBLE_STAGE_ELECTRICAL"):
+        await appliance.async_set_backup_type(BackupType.DOUBLE_STAGE_ELECTRICAL)
+
+    assert remeha_modbus_unit.holding[482] == BackupType.SINGLE_STAGE_ELECTRICAL.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("board_type", _OTHER_BOARD_TYPES)
+@pytest.mark.parametrize(
+    "backup_type", [pytest.param(backup_type, id=backup_type.name) for backup_type in BackupType]
+)
+async def test_appliance_set_backup_type_other_boards(
+    remeha_modbus_unit: MockModbusUnit, board_type: DeviceBoardType, backup_type: BackupType
+):
+    """Test that non CU-HW mainboards accept all backup types."""
+
+    _set_board_type(remeha_modbus_unit, board_type)
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    await appliance.async_set_backup_type(backup_type)
+
+    assert remeha_modbus_unit.holding[482] == backup_type.value
+    await appliance.async_update()
+    assert appliance.backup_type == backup_type
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "backup_type", [pytest.param(backup_type, id=backup_type.name) for backup_type in BackupType]
+)
+async def test_appliance_set_backup_type_unrestricted(
+    remeha_modbus_unit: MockModbusUnit, backup_type: BackupType
+):
+    """Test that an appliance without a known mainboard accepts all backup types."""
+
+    appliance = await _updated_appliance(remeha_modbus_unit)
+
+    await appliance.async_set_backup_type(backup_type)
+
+    assert remeha_modbus_unit.holding[482] == backup_type.value
+
+
+@pytest.mark.asyncio
+async def test_appliance_unsupported_backup_types_are_per_instance(
+    remeha_modbus_unit: MockModbusUnit, mock_modbus_connection: MockModbusConnection
+):
+    """Test that restricting one appliance does not restrict another."""
+
+    azorra_ace_unit = mock_modbus_connection.for_unit(2)
+    load_modbus_store(azorra_ace_unit, "azorra_ace_store.json")
+    await _restricted_appliance(azorra_ace_unit)
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    await appliance.async_set_backup_type(BackupType.DOUBLE_STAGE_ELECTRICAL)
+
+    assert remeha_modbus_unit.holding[482] == BackupType.DOUBLE_STAGE_ELECTRICAL.value

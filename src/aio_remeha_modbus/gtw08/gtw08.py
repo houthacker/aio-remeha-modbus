@@ -187,6 +187,14 @@ class GTW08(Device):
     async def _async_setup(self) -> None:
         await self.discovery_table.async_update()
         await self.main_control_monitoring.async_update()
+
+        # Restrict appliance field availability for certain appliances.
+        mainboards = [board for board in self.discovery_table.device_boards if board.is_mainboard()]
+        mainboard = mainboards[0] if mainboards else None
+
+        if mainboard:
+            self.appliance.restrict_fields_for_device(mainboard)
+
         await self.appliance.async_update()
         await self.buffer_tank.async_update()
 
