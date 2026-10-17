@@ -3,13 +3,16 @@
   "image": "mcr.microsoft.com/devcontainers/python:3.14-trixie",
   "name": "Async I/O modbus library for Remeha appliances",
   "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
     "PYTHONASYNCIODEBUG": "1",
     "UV_LINK_MODE": "copy"
   },
+  "postAttachCommand": "sudo chown -R vscode:vscode /home/vscode",
   "postStartCommand": "./scripts/devenv ${containerWorkspaceFolder}",
   "customizations": {
     "vscode": {
       "extensions": [
+        "anthropic.claude-code",
         "ms-python.python",
         "ms-python.pylint",
         "ms-python.vscode-python-envs",
@@ -69,5 +72,8 @@
     "ghcr.io/jsburckhardt/devcontainer-features/uv:latest": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/warrenbuckley/codespace-features/sqlite:latest": {}
-  }
+  },
+  "mounts": [
+    "source=claude-code-config,target=/home/vscode/.claude,type=volume"
+  ]
 }
