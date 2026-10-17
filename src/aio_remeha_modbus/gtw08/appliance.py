@@ -312,7 +312,6 @@ class Appliance(RemehaComponent):
         "return_temperature",
         "heat_pump_flow_temperature",
         "heat_pump_return_temperature",
-        "outside_temperature",
     }
 
     max_span = REMEHA_MAX_SPAN
