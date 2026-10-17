@@ -1035,6 +1035,17 @@ async def test_climate_zone_limits(gtw_08: GTW08):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+async def test_heat_pump_boiler_limits(gtw_08: GTW08):
+    """Test the limits of a Azorra Ace DHW zone."""
+
+    assert (gtw_08.zones[0].min_temp, gtw_08.zones[0].max_temp) == (
+        Limits.DHW_MIN_TEMP,
+        75.0,
+    )
+
+
+@pytest.mark.asyncio
 async def test_climate_zone_get_current_temperature_ch(gtw_08: GTW08):
     """Test that the temperature of a CH zone is the room temperature."""
 

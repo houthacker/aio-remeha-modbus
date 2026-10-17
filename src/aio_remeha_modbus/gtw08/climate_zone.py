@@ -274,6 +274,12 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     dhw_reduced_setpoint = uint16(address=666, scale=0.01, writable=True, unit="°C")
     """The setpoint for DHW in reduced (eco) mode"""
 
+    _max_flow_temp_setpoint = uint16(address=672, scale=0.01, writable=True, unit="°C")
+    """The maximum flow temperature setpoint.
+    Validation requires more context than a ``WriteValidator`` provides,
+    so validation is done in ``ClimateZone.async_set_max_temp()``.
+    """
+
     heating_curve_slope = uint8(address=674, scale=0.1, writable=True)
     """The slope of the heating curve of the zone"""
 
@@ -559,13 +565,12 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         This is to ensure unknown zone types won't get a flow temperature they can't handle.
         """
 
+        max_setpoint = self._max_flow_temp_setpoint
         if self.is_central_heating():
-            return Limits.CH_MAX_TEMP
+            return max_setpoint or Limits.CH_MAX_TEMP
 
-        if self.is_domestic_hot_water():
-            return Limits.DHW_MAX_TEMP
-
-        return min(Limits.CH_MAX_TEMP, Limits.DHW_MAX_TEMP)
+        assert self.is_domestic_hot_water()
+        return max_setpoint or Limits.DHW_MAX_TEMP
 
     @property
     def min_temp(self) -> float:
