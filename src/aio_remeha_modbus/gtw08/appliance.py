@@ -4,6 +4,7 @@ import inspect
 from datetime import time
 from enum import IntEnum
 
+from modbus_connection import ModbusUnit
 from modbus_connection.model import (
     CoilField,
     DiscreteInputField,
@@ -472,6 +473,14 @@ class Appliance(RemehaComponent):
 
     _unsupported_backup_types: set[BackupType]
 
+    def __init__(
+        self, unit: ModbusUnit, index: int = 1, *, base_offset: int = 0, _instance_offset: int = 0
+    ) -> None:
+        """Create a new ``Appliance`` instance."""
+
+        super().__init__(unit, index, base_offset=base_offset, _instance_offset=_instance_offset)
+        self._unsupported_backup_types = set()
+
     def restrict_fields_for_device(self, device: DeviceBoard) -> None:
         """Ensure that only fields supported by `device` can be read and written.
 
@@ -491,7 +500,7 @@ class Appliance(RemehaComponent):
         match board_category.type:
             case DeviceBoardType.CU_HW:
                 # Azorra Ace does not support a two-phase electrical backup.
-                self._unsupported_backup_types = {BackupType.DOUBLE_STAGE_ELECTRICAL}
+                self._unsupported_backup_types.add(BackupType.DOUBLE_STAGE_ELECTRICAL)
 
                 # Restrict other sensors that are not supported.
                 self.restrict_fields([
@@ -505,10 +514,6 @@ class Appliance(RemehaComponent):
                     )
                 ])
                 return
-
-        # By default, keep all fields. If restrict_fields_for_device is called multiple times,
-        # restricted fields are not overwritten.
-        self._unsupported_backup_types = set()
 
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.
