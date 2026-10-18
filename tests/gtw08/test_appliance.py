@@ -11,6 +11,8 @@ from aio_remeha_modbus.gtw08.appliance import (
     ApplianceSubStatus,
     BackupType,
     CoolingType,
+    DIContactLogicConfiguration,
+    DigitalInputConfiguration,
     SeasonalMode,
     SilentMode,
 )
@@ -23,6 +25,19 @@ _CU_HW_UNSUPPORTED_FIELDS = (
     "heat_pump_flow_temperature",
     "heat_pump_return_temperature",
 )
+
+_DIGITAL_INPUT_FIELDS = (
+    ("digital_input_1_configuration", 9009, DigitalInputConfiguration),
+    ("digital_input_2_configuration", 9010, DigitalInputConfiguration),
+    ("digital_input_1_contact_logic", 9011, DIContactLogicConfiguration),
+    ("digital_input_2_contact_logic", 9012, DIContactLogicConfiguration),
+)
+
+_OTHER_BOARD_TYPES = [
+    pytest.param(board_type, id=board_type.name)
+    for board_type in DeviceBoardType
+    if board_type != DeviceBoardType.CU_HW
+]
 
 
 def _set_board_type(unit: MockModbusUnit, board_type: DeviceBoardType) -> None:
@@ -322,14 +337,7 @@ async def test_appliance_restrict_fields_for_cu_hw(remeha_modbus_unit: MockModbu
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "board_type",
-    [
-        pytest.param(board_type, id=board_type.name)
-        for board_type in DeviceBoardType
-        if board_type != DeviceBoardType.CU_HW
-    ],
-)
+@pytest.mark.parametrize("board_type", _OTHER_BOARD_TYPES)
 async def test_appliance_restrict_fields_for_other_boards(
     remeha_modbus_unit: MockModbusUnit, board_type: DeviceBoardType
 ):
@@ -378,3 +386,82 @@ async def test_appliance_set_backup_type(
     assert remeha_modbus_unit.holding[482] == backup_type.value
     await appliance.async_update()
     assert appliance.backup_type == backup_type
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+async def test_appliance_read_digital_inputs_cu_hw(remeha_modbus_unit: MockModbusUnit):
+    """Test that the digital input configuration is read for a CU-HW mainboard."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert appliance.digital_input_1_configuration == DigitalInputConfiguration.OFF
+    assert appliance.digital_input_2_configuration == DigitalInputConfiguration.OFF
+    # The fixture reports the nan value for the contact logic registers.
+    assert appliance.digital_input_1_contact_logic is None
+    assert appliance.digital_input_2_contact_logic is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["azorra_ace_store.json"], indirect=True)
+@pytest.mark.parametrize(
+    ("field", "address", "value"),
+    [
+        pytest.param(field, address, value, id=f"{field}-{value.name}")
+        for field, address, enum_type in _DIGITAL_INPUT_FIELDS
+        for value in enum_type
+    ],
+)
+async def test_appliance_write_digital_inputs_cu_hw(
+    remeha_modbus_unit: MockModbusUnit,
+    field: str,
+    address: int,
+    value: DigitalInputConfiguration | DIContactLogicConfiguration,
+):
+    """Test that the digital input configuration can be written for a CU-HW mainboard."""
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    await appliance.write(field, value)
+
+    assert remeha_modbus_unit.holding[address] == value.value
+    await appliance.async_update()
+    assert getattr(appliance, field) == value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("board_type", _OTHER_BOARD_TYPES)
+async def test_appliance_read_digital_inputs_other_boards(
+    remeha_modbus_unit: MockModbusUnit, board_type: DeviceBoardType
+):
+    """Test that the digital input configuration is unavailable for non CU-HW mainboards."""
+
+    _set_board_type(remeha_modbus_unit, board_type)
+
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    assert all(getattr(appliance, field) is None for field, _, _ in _DIGITAL_INPUT_FIELDS)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("board_type", _OTHER_BOARD_TYPES)
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param(field, next(iter(enum_type)), id=field)
+        for field, _, enum_type in _DIGITAL_INPUT_FIELDS
+    ],
+)
+async def test_appliance_write_digital_inputs_other_boards(
+    remeha_modbus_unit: MockModbusUnit,
+    board_type: DeviceBoardType,
+    field: str,
+    value: DigitalInputConfiguration | DIContactLogicConfiguration,
+):
+    """Test that the digital input configuration cannot be written for non CU-HW mainboards."""
+
+    _set_board_type(remeha_modbus_unit, board_type)
+    appliance = await _restricted_appliance(remeha_modbus_unit)
+
+    with pytest.raises(AttributeError, match=field):
+        await appliance.write(field, value)
