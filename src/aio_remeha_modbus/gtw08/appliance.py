@@ -694,3 +694,31 @@ class Appliance(RemehaComponent):
         """Disable forced cooling mode."""
 
         await self.write("forced_cooling_mode", False)
+
+    async def async_set_digital_input_1_configuration(
+        self, value: DigitalInputConfiguration
+    ) -> None:
+        """Set the configuration of digital input 1."""
+
+        await self.write("digital_input_1_configuration", value)
+
+    async def async_set_digital_input_2_configuration(
+        self, value: DigitalInputConfiguration
+    ) -> None:
+        """Set the configuration of digital input 2."""
+
+        await self.write("digital_input_2_configuration", value)
+
+    async def async_set_digital_input_1_contact_logic(
+        self, value: DIContactLogicConfiguration
+    ) -> None:
+        """Set the contact logic for digital input 1."""
+
+        await self.write("digital_input_1_contact_logic", value)
+
+    async def async_set_digital_input_2_contact_logic(
+        self, value: DIContactLogicConfiguration
+    ) -> None:
+        """Set the contact logic for digital input 2."""
+
+        await self.write("digital_input_2_contact_logic", value)
