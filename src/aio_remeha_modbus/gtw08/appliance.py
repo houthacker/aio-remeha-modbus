@@ -471,15 +471,12 @@ class Appliance(RemehaComponent):
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) on a hybrid system (parameter HM031)."""
 
-    _unsupported_backup_types: set[BackupType]
-
     def __init__(
         self, unit: ModbusUnit, index: int = 1, *, base_offset: int = 0, _instance_offset: int = 0
     ) -> None:
         """Create a new ``Appliance`` instance."""
 
         super().__init__(unit, index, base_offset=base_offset, _instance_offset=_instance_offset)
-        self._unsupported_backup_types = set()
 
     def restrict_fields_for_device(self, device: DeviceBoard) -> None:
         """Ensure that only fields supported by `device` can be read and written.
@@ -494,15 +491,12 @@ class Appliance(RemehaComponent):
         board_category = device.board_category
         if not board_category or not board_category.type:
             # Keep all fields. If restrict_fields_for_device is called multiple times,
-            # restricted fields are not overwritten.
+            # restricted fields are only overwritten for DeviceBoardType.CU_HW.
             return
 
         match board_category.type:
             case DeviceBoardType.CU_HW:
-                # Azorra Ace does not support a two-phase electrical backup.
-                self._unsupported_backup_types.add(BackupType.DOUBLE_STAGE_ELECTRICAL)
-
-                # Restrict other sensors that are not supported.
+                # Restrict sensors that are not supported.
                 self.restrict_fields([
                     name
                     for name, _ in inspect.getmembers_static(
@@ -560,19 +554,15 @@ class Appliance(RemehaComponent):
         """Set the backup type for this appliance.
 
         Not all appliances support all backup types. For instance, a heat pump boiler
-        like Azorra Ace does not support a 2-stage electrical backup.
-        Attempting to set such a backup type raises an error.
+        like Azorra Ace 200/250H _does_ support a 2-stage electrical backup, while the
+        non-H versions do not support that.
+
+        Users are assumed to know what their appliance supports and act accordingly.
 
         Args:
             backup_type(BackupType): The new backup type for this appliance.
 
-        Raises:
-            `ValueError` if an unsupported `BackupType` is provided.
-
         """
-
-        if backup_type in self._unsupported_backup_types:
-            raise ValueError(f"Appliance does not support backup type {backup_type.name}")
 
         await self.write("backup_type", backup_type)
 
