@@ -69,6 +69,42 @@ class CoolingType(IntEnum):
     """
 
 
+class DigitalInputConfiguration(IntEnum):
+    """Configures the purpose of a digital input."""
+
+    OFF = 0
+    """The digital input is turned off."""
+
+    SMART_GRID = 1
+    """The digital input is used for Smart Grid connectivity."""
+
+    RELEASE_COMPRESSOR = 2
+    """Ignores any (failing) preconditions and allows the heat pump
+    compressor to be started.
+
+    In what physical state the contact is released depends on
+    the value of parameter `HP077`.
+    """
+
+    RELEASE_BACKUP = 3
+    """Ignores any (failing) preconditions and allows heat delivery
+    from backup sources.
+
+    In what physical state the contact is released depends on
+    the value of parameter `HP078`.
+    """
+
+
+class DIContactLogicConfiguration(IntEnum):
+    """Configuration of digital input logic (NO/NC)."""
+
+    NORMALLY_OPEN = 0
+    """The default state of the related digital input is open (i.e. non-conductive)."""
+
+    NORMALLY_CLOSED = 1
+    """The default state of the related digital input is closed (i.e. conductive)."""
+
+
 class ApplianceStatus(IntEnum):
     """The current status of the appliance."""
 
@@ -331,8 +367,15 @@ class Appliance(RemehaComponent):
         "heat_pump_return_temperature",
     }
 
+    _other_board_unsupported_fields: set[str] = {
+        "digital_input_1_configuration",
+        "digital_input_2_configuration",
+        "digital_input_1_contact_logic",
+        "digital_input_2_contact_logic",
+    }
+
     max_span = REMEHA_MAX_SPAN
-    register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9230, 9230))
+    register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9009, 9012), (9230, 9230))
 
     outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""
@@ -467,6 +510,27 @@ class Appliance(RemehaComponent):
     * To let the system decide to cool or heat, set HVACMode to HEAT_COOL
     """
 
+    # TODO These registers are for a Thermodynamic Water Heater. Move to dedicated class if more follow.
+    digital_input_1_configuration = enum(
+        address=9009, enum_type=DigitalInputConfiguration, signed=False, nan=0xFF, writable=True
+    )
+    """Configuration of digital input 1 (`D.I1`, parameter `HP059`). Only available for `CU_HW` mainboards."""
+
+    digital_input_2_configuration = enum(
+        address=9010, enum_type=DigitalInputConfiguration, signed=False, nan=0xFF, writable=True
+    )
+    """Configuration of digital input 2 (`D.I2`, parameter `HP076`). Only available for `CU_HW` mainboards."""
+
+    digital_input_1_contact_logic = enum(
+        address=9011, enum_type=DIContactLogicConfiguration, signed=False, nan=0xFF, writable=True
+    )
+    """Configuration of the default state of digital input 1. Only available for `CU_HW` mainboards."""
+
+    digital_input_2_contact_logic = enum(
+        address=9012, enum_type=DIContactLogicConfiguration, signed=False, nan=0xFF, writable=True
+    )
+    """Configuration of the default state of digital input 2. Only available for `CU_HW` mainboards."""
+
     # TODO This is a register for hybrid appliances. If more are required, move to dedicated class.
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) on a hybrid system (parameter HM031)."""
@@ -508,6 +572,17 @@ class Appliance(RemehaComponent):
                     )
                 ])
                 return
+            case _:
+                self.restrict_fields([
+                    name
+                    for name, _ in inspect.getmembers_static(
+                        Appliance,
+                        lambda member: (
+                            (isinstance(member, (RegisterField, CoilField, DiscreteInputField)))
+                            and member.name not in self._other_board_unsupported_fields
+                        ),
+                    )
+                ])
 
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.
