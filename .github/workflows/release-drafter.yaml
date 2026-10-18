@@ -56,7 +56,7 @@ jobs:
           sed -i "s/aio-remeha-modbus>=.*/aio-remeha-modbus>=${{ steps.version.outputs.py440_version }}/g" README.md
 
       - name: Install uv and dependencies
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
 
       - name: Synchronize uv.lock file
         run: uv sync
