@@ -553,7 +553,7 @@ class Appliance(RemehaComponent):
         """
 
         board_category = device.board_category
-        if not board_category or not board_category.type:
+        if not board_category or board_category.type is None:
             # Keep all fields. If restrict_fields_for_device is called multiple times,
             # restricted fields are only overwritten for DeviceBoardType.CU_HW.
             return
