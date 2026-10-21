@@ -26,8 +26,26 @@ class TimeslotActivity(IntEnum):
     """The type of activity that must run during the containing TimeSlot."""
 
     HEAT_COOL = 0xC8
+    """Activity for CH circuits"""
+
     DHW = 0x00
+    """Activity to heat the actual tap water used for showering etc."""
+
     DHW_PRIMARY = 0xA0
+    """Activity to heat the primary DHW circuit.
+
+    The primary DHW circuit is the circuit that
+    carries the heat to a DHW cylinder or heat exchanger.
+    It never mixes with the actual drinking water.
+    """
+
+    DHW_ALT = 0xE6
+    """Another DHW activity.
+
+    What differs from DHW, DHW_PRIMARY hasn't been
+    decoded yet but there are some (newer) appliances using this kind
+    of activity.
+    """
 
 
 class TimeslotSetpointType(IntEnum):
