@@ -23,7 +23,7 @@ sys.path.insert(0, str(PACKAGE_DIR.parent))
 project = "aio-remeha-modbus"
 copyright = "2026, houthacker"  # noqa: A001
 author = "houthacker"
-release = "4.7.1"
+release = "4.8.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
