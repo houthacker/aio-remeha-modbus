@@ -101,6 +101,16 @@ class ClimateZoneHeatingMode(IntEnum):
     COOLING = 2
 
 
+class ClimateZoneRunningMode(IntEnum):
+    """The current running mode on the zone."""
+
+    SCHEDULING = 0
+    MANUAL = 1
+    ANTI_FROST = 2
+    TEMPORARY = 3
+    HOLIDAY = 4
+
+
 def _writable_schedule_id() -> Callable[[Any], Any]:
     """Validate the given `ClimateZoneScheduleId` for writing."""
 
@@ -315,6 +325,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
     room_temperature = int16(address=1104, scale=0.1, unit="°C")
     """The current room temperature"""
+
+    running_mode = enum(address=1108, enum_type=ClimateZoneRunningMode, nan=0xFF)
+    """The current running mode of the climate zone"""
 
     heating_mode = enum(address=1109, enum_type=ClimateZoneHeatingMode, nan=0xFF)
     """The current heating mode of the climate zone"""
