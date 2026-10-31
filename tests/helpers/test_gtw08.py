@@ -1,6 +1,6 @@
 """Test GTW-08 helper."""
 
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, tzinfo
 from typing import Final
 
 import pytest
@@ -63,6 +63,35 @@ def test_time_of_day_epoch_encode():
     """Test decoding the CiA 301 base date to bytes."""
 
     assert TimeOfDay.epoch_bytes() == b"\x00\x00\x00\x00\x00\x00"
+
+
+def test_time_of_day_epoch_bytes_encode_the_base_date():
+    """Test that the epoch bytes are what the CiA 301 base date encodes to."""
+
+    assert TimeOfDay.epoch_bytes() == TimeOfDay.to_bytes(datetime(1984, 1, 1))
+
+
+@pytest.mark.parametrize(
+    "time_zone",
+    [pytest.param(tz.gettz("Europe/Amsterdam"), id="aware"), pytest.param(None, id="naive")],
+)
+def test_time_of_day_from_bytes_epoch_is_none(time_zone: tzinfo | None):
+    """Test that the CiA 301 base date is decoded as 'not set'."""
+
+    assert TimeOfDay.from_bytes(TimeOfDay.epoch_bytes(), time_zone) is None
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        pytest.param(b"\x00\x01\x00\x00\x00\x00", datetime(1984, 1, 1, 0, 0, 0, 1000), id="1ms"),
+        pytest.param(b"\x00\x00\x00\x00\x00\x01", datetime(1984, 1, 2), id="1day"),
+    ],
+)
+def test_time_of_day_from_bytes_after_epoch(data: bytes, expected: datetime):
+    """Test that only the exact base date is decoded as 'not set'."""
+
+    assert TimeOfDay.from_bytes(data) == expected
 
 
 def test_time_of_day_round_trip():
