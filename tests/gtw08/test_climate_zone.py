@@ -1156,6 +1156,45 @@ async def test_climate_zone_dhw_expired_temporary_setpoint_is_ignored(gtw_08: GT
 
 
 @pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
+async def test_climate_zone_dhw_epoch_temporary_setpoint_end_time_is_ignored(gtw_08: GTW08):
+    """Test that a temporary setpoint without an end time is ignored."""
+
+    zone = gtw_08.zones[1]
+    await zone.async_set_current_schedule(
+        ClimateZoneScheduleId.SCHEDULE_1, dict.fromkeys(Weekday, _DHW_SCHEDULE)
+    )
+    update_raw_data(
+        gtw_08,
+        [
+            (663 + _DHW_ZONE_OFFSET, 275),
+            *[(978 + _DHW_ZONE_OFFSET + i, 0) for i in range(3)],
+        ],
+    )
+    await gtw_08.async_update()
+
+    assert zone.temporary_room_setpoint_end_time is None
+    assert zone.current_setpoint == 55.0  # 12:00 is within the comfort timeslot.
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")
+@pytest.mark.parametrize("remeha_modbus_unit", ["modbus_store_ch_scheduling.json"], indirect=True)
+async def test_climate_zone_ch_epoch_temporary_setpoint_end_time_is_ignored(gtw_08: GTW08):
+    """Test that a temporary setpoint without an end time is ignored."""
+
+    zone = gtw_08.zones[0]
+    assert zone.mode is ClimateZoneMode.SCHEDULING
+    scheduled = zone.current_setpoint
+    assert scheduled is not None
+    update_raw_data(gtw_08, [(663, 275), *[(978 + i, 0) for i in range(3)]])
+    await gtw_08.async_update()
+
+    assert zone.temporary_room_setpoint_end_time is None
+    assert zone.current_setpoint == scheduled
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("remeha_modbus_unit", ["modbus_store_ch_scheduling.json"], indirect=True)
 async def test_climate_zone_ch_temporary_setpoint_expires(gtw_08: GTW08):
     """Test that a temporary setpoint in scheduling mode is active for two hours."""
@@ -1549,11 +1588,14 @@ async def test_climate_zone_holiday_mode_times(gtw_08: GTW08):
 
 
 @pytest.mark.asyncio
-async def test_climate_zone_holiday_mode_times_not_set(gtw_08: GTW08):
+@pytest.mark.parametrize(
+    "value", [pytest.param(0xFFFF, id="nan"), pytest.param(0x0000, id="epoch")]
+)
+async def test_climate_zone_holiday_mode_times_not_set(gtw_08: GTW08, value: int):
     """Test that unset holiday mode times are read as `None`."""
 
     zone = gtw_08.zones[0]
-    update_raw_data(gtw_08, [(address, 0xFFFF) for address in range(971, 977)])
+    update_raw_data(gtw_08, [(address, value) for address in range(971, 977)])
     await gtw_08.async_update()
 
     assert zone.holiday_mode_start_time is None
@@ -1686,7 +1728,7 @@ async def test_climate_zone_enable_holiday_mode_invalid_period(
 @pytest.mark.asyncio
 @freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
 async def test_climate_zone_disable_holiday_mode(gtw_08: GTW08):
-    """Test that disabling the holiday mode resets both times to the CiA 301 base date."""
+    """Test that disabling the holiday mode clears both times."""
 
     zone = gtw_08.zones[0]
     unit = get_modbus_unit(gtw_08)
@@ -1698,3 +1740,8 @@ async def test_climate_zone_disable_holiday_mode(gtw_08: GTW08):
     await zone.async_disable_holiday_mode()
 
     assert [unit.holding[address] for address in range(971, 977)] == [0] * 6
+    assert zone.holiday_mode_start_time is None
+    assert zone.holiday_mode_end_time is None
+    await gtw_08.async_update()
+    assert zone.holiday_mode_start_time is None
+    assert zone.holiday_mode_end_time is None
