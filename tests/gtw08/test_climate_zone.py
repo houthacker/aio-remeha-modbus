@@ -1,7 +1,7 @@
 """Tests for ClimateZone."""
 
 import logging
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta, tzinfo
 from types import SimpleNamespace
 from typing import Final
 
@@ -15,6 +15,7 @@ from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
     ClimateZoneFunction,
     ClimateZoneMode,
+    ClimateZoneRunningMode,
     ClimateZoneScheduleId,
     ClimateZoneType,
     _map_selected_schedule_for_read,
@@ -1431,3 +1432,269 @@ async def test_climate_zone_equal_zones_have_equal_hashes(
 
     assert gtw_08.zones[0] == same
     assert hash(gtw_08.zones[0]) == hash(same)
+
+
+_AMSTERDAM = tz.gettz("Europe/Amsterdam")
+
+_HOLIDAY_SETPOINTS = [
+    pytest.param(0, 661, 1, id="ch"),
+    pytest.param(1, 667 + _DHW_ZONE_OFFSET, 10, id="dhw"),
+]
+"""The zone index, holiday setpoint register and register units per 0.1 °C of each zone kind."""
+
+
+def _time_of_day_registers(address: int, value: datetime) -> list[tuple[int, int]]:
+    """Return the register values that hold `value`, starting at `address`."""
+
+    encoded = TimeOfDay.to_bytes(value)
+    return [(address + i, int.from_bytes(encoded[i * 2 : i * 2 + 2])) for i in range(3)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", list(ClimateZoneMode))
+@pytest.mark.parametrize(("zone_index", "register", "units"), _HOLIDAY_SETPOINTS)
+async def test_climate_zone_current_setpoint_holiday(
+    gtw_08: GTW08, zone_index: int, register: int, units: int, mode: ClimateZoneMode
+):
+    """Test that the holiday setpoint takes precedence over the setpoint of any zone mode."""
+
+    zone = gtw_08.zones[zone_index]
+    offset = zone_index * REMEHA_ZONE_RESERVED_REGISTERS
+    update_raw_data(
+        gtw_08,
+        [
+            (register, 155 * units),  # 15.5 °C
+            (649 + offset, mode),
+            (1108 + offset, ClimateZoneRunningMode.HOLIDAY),
+        ],
+    )
+    await gtw_08.async_update()
+
+    assert zone.running_mode is ClimateZoneRunningMode.HOLIDAY
+    assert zone.current_setpoint == 15.5
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "running_mode",
+    [mode for mode in ClimateZoneRunningMode if mode is not ClimateZoneRunningMode.HOLIDAY],
+)
+@pytest.mark.parametrize(("zone_index", "register", "units"), _HOLIDAY_SETPOINTS)
+async def test_climate_zone_current_setpoint_ignores_holiday_setpoint_outside_holiday(
+    gtw_08: GTW08,
+    zone_index: int,
+    register: int,
+    units: int,
+    running_mode: ClimateZoneRunningMode,
+):
+    """Test that the holiday setpoint is only used while the zone runs in holiday mode."""
+
+    zone = gtw_08.zones[zone_index]
+    offset = zone_index * REMEHA_ZONE_RESERVED_REGISTERS
+    update_raw_data(
+        gtw_08,
+        [
+            (register, 155 * units),  # 15.5 °C
+            (649 + offset, ClimateZoneMode.MANUAL),
+            (1108 + offset, running_mode),
+        ],
+    )
+    await gtw_08.async_update()
+
+    assert zone.current_setpoint != 15.5
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", list(ClimateZoneMode))
+@pytest.mark.parametrize(("zone_index", "register", "units"), _HOLIDAY_SETPOINTS)
+async def test_climate_zone_set_current_setpoint_holiday(
+    gtw_08: GTW08, zone_index: int, register: int, units: int, mode: ClimateZoneMode
+):
+    """Test that only the holiday setpoint is written while the zone runs in holiday mode."""
+
+    zone = gtw_08.zones[zone_index]
+    unit = get_modbus_unit(gtw_08)
+    offset = zone_index * REMEHA_ZONE_RESERVED_REGISTERS
+    update_raw_data(
+        gtw_08,
+        [
+            (649 + offset, mode),
+            (1108 + offset, ClimateZoneRunningMode.HOLIDAY),
+        ],
+    )
+    await gtw_08.async_update()
+    before = dict(unit.holding)
+
+    await zone.async_set_current_setpoint(25.5)
+
+    assert unit.holding == {**before, register: 255 * units}
+    await zone.async_update()
+    assert zone.current_setpoint == 25.5
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_holiday_mode_times(gtw_08: GTW08):
+    """Test that the holiday mode start and end time are read in the zone time zone."""
+
+    start = datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM)
+    end = datetime(2026, 6, 20, 18, 30, tzinfo=_AMSTERDAM)
+    zone = gtw_08.zones[0]
+    update_raw_data(
+        gtw_08, [*_time_of_day_registers(971, start), *_time_of_day_registers(974, end)]
+    )
+    await gtw_08.async_update()
+
+    assert zone.holiday_mode_start_time == start
+    assert zone.holiday_mode_end_time == end
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_holiday_mode_times_not_set(gtw_08: GTW08):
+    """Test that unset holiday mode times are read as `None`."""
+
+    zone = gtw_08.zones[0]
+    update_raw_data(gtw_08, [(address, 0xFFFF) for address in range(971, 977)])
+    await gtw_08.async_update()
+
+    assert zone.holiday_mode_start_time is None
+    assert zone.holiday_mode_end_time is None
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
+@pytest.mark.parametrize(
+    "time_zone", [pytest.param(_AMSTERDAM, id="aware"), pytest.param(None, id="naive")]
+)
+async def test_climate_zone_enable_holiday_mode(gtw_08: GTW08, time_zone: tzinfo | None):
+    """Test that the holiday mode start and end time are encoded to their registers."""
+
+    zone = gtw_08.zones[0]
+    unit = get_modbus_unit(gtw_08)
+
+    await zone.async_enable_holiday_mode(
+        datetime(2026, 6, 10, 12, tzinfo=time_zone),
+        datetime(2026, 6, 20, 18, 30, tzinfo=time_zone),
+    )
+
+    # Words are ms (low), ms (high), days since 1984-01-01.
+    assert [unit.holding[address] for address in range(971, 974)] == [0x2E00, 0x0293, 0x3C8D]
+    assert [unit.holding[address] for address in range(974, 977)] == [0x3C40, 0x03F8, 0x3C97]
+
+    expected_start = datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM)
+    expected_end = datetime(2026, 6, 20, 18, 30, tzinfo=_AMSTERDAM)
+    assert zone.holiday_mode_start_time == expected_start
+    assert zone.holiday_mode_end_time == expected_end
+    await gtw_08.async_update()
+    assert zone.holiday_mode_start_time == expected_start
+    assert zone.holiday_mode_end_time == expected_end
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
+async def test_climate_zone_enable_holiday_mode_start_earlier_today(gtw_08: GTW08):
+    """Test that a start time earlier today is allowed, since only the date is validated."""
+
+    start = datetime(2026, 6, 1, 8, tzinfo=_AMSTERDAM)
+    end = datetime(2026, 6, 2, 8, tzinfo=_AMSTERDAM)
+    zone = gtw_08.zones[0]
+
+    await zone.async_enable_holiday_mode(start, end)
+
+    assert zone.holiday_mode_start_time == start
+    assert zone.holiday_mode_end_time == end
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
+@pytest.mark.parametrize(
+    ("start_tz", "end_tz"),
+    [
+        pytest.param(UTC, UTC, id="other-time-zone"),
+        pytest.param(_AMSTERDAM, None, id="aware-start-naive-end"),
+        pytest.param(None, _AMSTERDAM, id="naive-start-aware-end"),
+        # Only valid by wall clock: as instants, this end (11:00 UTC) precedes this start.
+        pytest.param(UTC, _AMSTERDAM, id="end-before-start-as-instants"),
+    ],
+)
+async def test_climate_zone_enable_holiday_mode_replaces_tzinfo(
+    gtw_08: GTW08, start_tz: tzinfo | None, end_tz: tzinfo | None
+):
+    """Test that the wall clock times are kept, since the modbus data has no time zone."""
+
+    zone = gtw_08.zones[0]
+
+    await zone.async_enable_holiday_mode(
+        datetime(2026, 6, 10, 12, tzinfo=start_tz),
+        datetime(2026, 6, 10, 13, tzinfo=end_tz),
+    )
+
+    assert zone.holiday_mode_start_time == datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM)
+    assert zone.holiday_mode_end_time == datetime(2026, 6, 10, 13, tzinfo=_AMSTERDAM)
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
+@pytest.mark.parametrize(
+    ("start", "end", "message"),
+    [
+        pytest.param(
+            datetime(2026, 5, 31, 12, tzinfo=_AMSTERDAM),
+            datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+            "must be today or later",
+            id="start-in-past",
+        ),
+        pytest.param(
+            datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+            datetime(2026, 5, 31, 12, tzinfo=_AMSTERDAM),
+            "must be today or later",
+            id="end-in-past",
+        ),
+        pytest.param(
+            datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+            datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+            "must be after start time",
+            id="end-equals-start",
+        ),
+        pytest.param(
+            datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+            datetime(2026, 6, 9, 12, tzinfo=_AMSTERDAM),
+            "must be after start time",
+            id="end-before-start",
+        ),
+        pytest.param(
+            datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+            datetime(2026, 6, 10, 12),
+            "must be after start time",
+            id="end-equals-start-mixed-aware-naive",
+        ),
+    ],
+)
+async def test_climate_zone_enable_holiday_mode_invalid_period(
+    gtw_08: GTW08, start: datetime, end: datetime, message: str
+):
+    """Test that an invalid holiday period is rejected without writing any register."""
+
+    unit = get_modbus_unit(gtw_08)
+    before = dict(unit.holding)
+
+    with pytest.raises(ValueError, match=message):
+        await gtw_08.zones[0].async_enable_holiday_mode(start, end)
+
+    assert unit.holding == before
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-06-01 10:00:00")  # 12:00 in Europe/Amsterdam
+async def test_climate_zone_disable_holiday_mode(gtw_08: GTW08):
+    """Test that disabling the holiday mode resets both times to the CiA 301 base date."""
+
+    zone = gtw_08.zones[0]
+    unit = get_modbus_unit(gtw_08)
+    await zone.async_enable_holiday_mode(
+        datetime(2026, 6, 10, 12, tzinfo=_AMSTERDAM),
+        datetime(2026, 6, 20, 12, tzinfo=_AMSTERDAM),
+    )
+
+    await zone.async_disable_holiday_mode()
+
+    assert [unit.holding[address] for address in range(971, 977)] == [0] * 6

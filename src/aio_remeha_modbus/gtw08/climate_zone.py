@@ -287,7 +287,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     dhw_reduced_setpoint = uint16(address=666, scale=0.01, writable=True, unit="°C")
     """The setpoint for DHW in reduced (eco) mode"""
 
-    dhw_holiday_setpoint = uint16(address=667, scale=0.1, writable=True, unit="°C")
+    dhw_holiday_setpoint = uint16(address=667, scale=0.01, writable=True, unit="°C")
     """The setpoint for DHW in holiday mode"""
 
     _max_flow_temp_setpoint = uint16(address=672, scale=0.01, writable=True, unit="°C")
@@ -890,6 +890,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         * Neither `start` nor `end` are allowed to be in the past.
         * `end` must be after `start`
 
+        The modbus registers are not time zone aware, so any `tzinfo` of `start` and `end` is
+        replaced by `self.time_zone`: 14:00 means 14:00 on the appliance, whatever the `tzinfo`.
+
         Args:
             start (datetime): The start date/time of the holiday mode.
             end (datetime): The end date/time of the holiday mode.
@@ -898,6 +901,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             ValueError: if one or more conditions are not met.
 
         """
+
+        start = start.replace(tzinfo=self.time_zone)
+        end = end.replace(tzinfo=self.time_zone)
 
         today = datetime.now(tz=self.time_zone).date()
         if start.date() < today or end.date() < today:
@@ -910,12 +916,8 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 f"Cannot enable holiday mode: end time {end} must be after start time {start}."
             )
 
-        await self.write(
-            "_holiday_mode_start_time", TimeOfDay.to_bytes(start.replace(tzinfo=self.time_zone))
-        )
-        await self.write(
-            "_holiday_mode_end_time", TimeOfDay.to_bytes(end.replace(tzinfo=self.time_zone))
-        )
+        await self.write("_holiday_mode_start_time", TimeOfDay.to_bytes(start))
+        await self.write("_holiday_mode_end_time", TimeOfDay.to_bytes(end))
 
     async def async_disable_holiday_mode(self) -> None:
         """Disable the holiday mode.
