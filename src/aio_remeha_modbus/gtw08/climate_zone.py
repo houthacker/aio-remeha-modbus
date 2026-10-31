@@ -269,6 +269,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     room_cooling_setpoint_5 = uint16(address=660, scale=0.1, writable=True, unit="°C")
     """Cooling setpoint in EVENING mode"""
 
+    room_holiday_setpoint = uint16(address=661, scale=0.1, writable=True, unit="°C")
+    """The setpoint for holiday mode"""
+
     temporary_room_setpoint = uint16(address=663, scale=0.1, writable=True, unit="°C")
     """Temporary room setpoint override. Only available when mode is SCHEDULING.
 
@@ -283,6 +286,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
     dhw_reduced_setpoint = uint16(address=666, scale=0.01, writable=True, unit="°C")
     """The setpoint for DHW in reduced (eco) mode"""
+
+    dhw_holiday_setpoint = uint16(address=667, scale=0.1, writable=True, unit="°C")
+    """The setpoint for DHW in holiday mode"""
 
     _max_flow_temp_setpoint = uint16(address=672, scale=0.01, writable=True, unit="°C")
     """The maximum flow temperature setpoint.
@@ -313,6 +319,12 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     available_schedules = repeating_group(
         4, TimeProgram, stride=REMEHA_TIME_PROGRAM_RESERVED_REGISTERS
     )
+
+    _holiday_mode_start_time = nullable_binary(address=971, count=3, writable=True)
+    """Start time of holiday mode"""
+
+    _holiday_mode_end_time = nullable_binary(address=974, count=3, writable=True)
+    """End time of holiday mode"""
 
     _temporary_room_setpoint_end_time = nullable_binary(address=978, count=3, writable=True)
     """End time of temporary room setpoint override"""
@@ -407,6 +419,30 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         time_program = self.available_schedules[selected]
         return {day: time_program.day_schedules[day].slots for day in Weekday}
+
+    @property
+    def holiday_mode_start_time(self) -> datetime | None:
+        """The start time of the holiday mode.
+
+        The returned `datetime` is in the configured time zone of `self.time_zone`.
+        """
+
+        if self._holiday_mode_start_time is None:
+            return None
+
+        return TimeOfDay.from_bytes(data=self._holiday_mode_start_time, time_zone=self.time_zone)
+
+    @property
+    def holiday_mode_end_time(self) -> datetime | None:
+        """The end time of the holiday mode.
+
+        The returned `datetime` is in the configured time zone of `self.time_zone`.
+        """
+
+        if self._holiday_mode_end_time is None:
+            return None
+
+        return TimeOfDay.from_bytes(data=self._holiday_mode_end_time, time_zone=self.time_zone)
 
     @property
     def temporary_room_setpoint_end_time(self) -> datetime | None:
@@ -522,6 +558,34 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         override_end_time: datetime = now + relativedelta.relativedelta(hours=hours)
         await self.write("_temporary_room_setpoint_end_time", TimeOfDay.to_bytes(override_end_time))
 
+    def _current_setpoint_ch(self) -> float | None:
+        if self.running_mode is ClimateZoneRunningMode.HOLIDAY:
+            return self.room_holiday_setpoint
+
+        match self.mode:
+            case ClimateZoneMode.SCHEDULING:
+                return self._get_current_ch_scheduling_setpoint()
+            case ClimateZoneMode.MANUAL:
+                return self.room_manual_setpoint
+            case ClimateZoneMode.ANTI_FROST:
+                return self.min_temp
+
+        return None
+
+    def _current_setpoint_dhw(self) -> float | None:
+        if self.running_mode is ClimateZoneRunningMode.HOLIDAY:
+            return self.dhw_holiday_setpoint
+
+        match self.mode:
+            case ClimateZoneMode.SCHEDULING:
+                return self._get_current_dhw_scheduling_setpoint()
+            case ClimateZoneMode.MANUAL:
+                return self.dhw_comfort_setpoint
+            case ClimateZoneMode.ANTI_FROST:
+                return self.dhw_reduced_setpoint
+
+        return None
+
     @property
     def current_setpoint(self) -> float | None:
         """The current setpoint of this zone.
@@ -535,21 +599,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """
 
         if self.is_central_heating():
-            match self.mode:
-                case ClimateZoneMode.SCHEDULING:
-                    return self._get_current_ch_scheduling_setpoint()
-                case ClimateZoneMode.MANUAL:
-                    return self.room_manual_setpoint
-                case ClimateZoneMode.ANTI_FROST:
-                    return self.min_temp
+            return self._current_setpoint_ch()
         if self.is_domestic_hot_water():
-            match self.mode:
-                case ClimateZoneMode.SCHEDULING:
-                    return self._get_current_dhw_scheduling_setpoint()
-                case ClimateZoneMode.MANUAL:
-                    return self.dhw_comfort_setpoint
-                case ClimateZoneMode.ANTI_FROST:
-                    return self.dhw_reduced_setpoint
+            return self._current_setpoint_dhw()
 
         _LOGGER.warning("Current setpoint not supported for climate zones of type %s", self.type)
         return None
@@ -633,6 +685,37 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("mode", mode)
 
+    async def _async_set_current_setpoint_ch(self, setpoint: float) -> None:
+        if self.running_mode is ClimateZoneRunningMode.HOLIDAY:
+            await self.write("room_holiday_setpoint", setpoint)
+            return
+
+        match self.mode:
+            case ClimateZoneMode.SCHEDULING:
+                await self._async_temporary_room_setpoint_override(
+                    setpoint, hours=cast(int, Limits.SCHEDULING_SETPOINT_OVERRIDE_DURATION)
+                )
+            case ClimateZoneMode.MANUAL:
+                await self.write("room_manual_setpoint", setpoint)
+
+    async def _async_set_current_setpoint_dhw(self, setpoint: float) -> None:
+        if self.running_mode is ClimateZoneRunningMode.HOLIDAY:
+            await self.write("dhw_holiday_setpoint", setpoint)
+            return
+
+        match self.mode:
+            case ClimateZoneMode.SCHEDULING:
+                # DHW does not support a temporary setpoint override, at least
+                # through modbus the and Remeha Home app.
+                # Update schedule instead.
+                _LOGGER.warning(
+                    "Overriding DHW climate scheduling setpoint not supported; adjust schedule to do this."
+                )
+            case ClimateZoneMode.MANUAL:
+                await self.write("dhw_comfort_setpoint", setpoint)
+            case ClimateZoneMode.ANTI_FROST:
+                await self.write("dhw_reduced_setpoint", setpoint)
+
     async def async_set_current_setpoint(self, setpoint: float) -> None:
         """Set the current setpoint of this zone.
 
@@ -652,29 +735,11 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             return
 
         if self.is_central_heating():
-            match self.mode:
-                case ClimateZoneMode.SCHEDULING:
-                    await self._async_temporary_room_setpoint_override(
-                        setpoint, hours=cast(int, Limits.SCHEDULING_SETPOINT_OVERRIDE_DURATION)
-                    )
-                case ClimateZoneMode.MANUAL:
-                    await self.write("room_manual_setpoint", setpoint)
-                case _:
-                    pass
+            await self._async_set_current_setpoint_ch(setpoint)
 
         elif self.is_domestic_hot_water():
-            match self.mode:
-                case ClimateZoneMode.SCHEDULING:
-                    # DHW does not support a temporary setpoint override, at least
-                    # through modbus the and Remeha Home app.
-                    # Update schedule instead.
-                    _LOGGER.warning(
-                        "Overriding DHW climate scheduling setpoint not supported; adjust schedule to do this."
-                    )
-                case ClimateZoneMode.MANUAL:
-                    await self.write("dhw_comfort_setpoint", setpoint)
-                case ClimateZoneMode.ANTI_FROST:
-                    await self.write("dhw_reduced_setpoint", setpoint)
+            await self._async_set_current_setpoint_dhw(setpoint)
+
         else:
             _LOGGER.warning(
                 "Setting setpoint not supported for climate zones of type %s", self.type
@@ -816,6 +881,51 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         day_schedule = DaySchedule(unit=self._unit, base_offset=day_schedule_start)
 
         await day_schedule.async_set_time_slots(time_slots)
+
+    async def async_enable_holiday_mode(self, start: datetime, end: datetime) -> None:
+        """Enable the holiday mode when time is between `start` and `end`.
+
+        Conditions:
+        * The holiday mode is automatically activated when the current time is between `start` and `end`.
+        * Neither `start` nor `end` are allowed to be in the past.
+        * `end` must be after `start`
+
+        Args:
+            start (datetime): The start date/time of the holiday mode.
+            end (datetime): The end date/time of the holiday mode.
+
+        Raises:
+            ValueError: if one or more conditions are not met.
+
+        """
+
+        today = datetime.now(tz=self.time_zone).date()
+        if start.date() < today or end.date() < today:
+            raise ValueError(
+                "Cannot enable holiday mode: both 'start' and 'end' must be today or later."
+            )
+
+        if end <= start:
+            raise ValueError(
+                f"Cannot enable holiday mode: end time {end} must be after start time {start}."
+            )
+
+        await self.write(
+            "_holiday_mode_start_time", TimeOfDay.to_bytes(start.replace(tzinfo=self.time_zone))
+        )
+        await self.write(
+            "_holiday_mode_end_time", TimeOfDay.to_bytes(end.replace(tzinfo=self.time_zone))
+        )
+
+    async def async_disable_holiday_mode(self) -> None:
+        """Disable the holiday mode.
+
+        The holiday mode is also disabled if planned in the future.
+        """
+
+        epoch_bytes = TimeOfDay.epoch_bytes()
+        await self.write("_holiday_mode_start_time", epoch_bytes)
+        await self.write("_holiday_mode_end_time", epoch_bytes)
 
     def __eq__(self, other: object) -> bool:
         """Compare this `ClimateZone` with another for equality.

@@ -142,6 +142,12 @@ class TimeOfDay:
         ms_bytes: bytes = ms.to_bytes(4)
         return ms_bytes[2:4] + ms_bytes[0:2] + days.to_bytes(2)
 
+    @classmethod
+    def epoch_bytes(cls) -> bytes:
+        """Encode the CiA 301 base date to a `TIME_OF_DAY` struct."""
+
+        return cls.to_bytes(cls._CIA301_TOD_BASE_DATE)
+
 
 def get_current_timeslot(
     schedule: dict[Weekday, list[Timeslot] | None],
