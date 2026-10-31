@@ -75,9 +75,10 @@ class TimeOfDay:
     """Encoding to and decoding from a CiA 301 TIME_OF_DAY struct."""
 
     _CIA301_TOD_BASE_DATE: Final[datetime] = datetime(year=1984, month=1, day=1, hour=0, minute=0)
+    _CIA301_TOD_EPOCH_BYTES: Final[bytes] = b"\x00\x00\x00\x00\x00\x00"
 
     @classmethod
-    def from_bytes(cls, data: bytes, time_zone: tzinfo | None = None) -> datetime:
+    def from_bytes(cls, data: bytes, time_zone: tzinfo | None = None) -> datetime | None:
         """Decode a CiA 301 TIME_OF_DAY to a `datetime` object.
 
         `TIME_OF_DAY` is a struct that is defined as follows:
@@ -100,7 +101,8 @@ class TimeOfDay:
           time_zone (str): The name of the Home Assistant time zone, defaults to the local time zone of the running OS.
 
         Returns:
-          datetime: The decoded `TIME_OF_DAY` struct.
+          datetime | None: The decoded `TIME_OF_DAY` struct, or `None` if the decoded date/time equals
+          the `TIME_OF_DAY` epoch of 1984-01-01.
 
         Raises:
           `ValueError` if `time_zone` is an invalid time zone string or if `len(data) != 6`.
@@ -111,6 +113,9 @@ class TimeOfDay:
             raise ValueError(
                 f"Cannot decode data into datetime: data must be exactly 6 bytes, but got {len(data)}"
             )
+
+        if data == cls._CIA301_TOD_EPOCH_BYTES:
+            return None
 
         ms = int.from_bytes(
             data[2:4] + data[0:2],
@@ -146,7 +151,7 @@ class TimeOfDay:
     def epoch_bytes(cls) -> bytes:
         """Encode the CiA 301 base date to a `TIME_OF_DAY` struct."""
 
-        return cls.to_bytes(cls._CIA301_TOD_BASE_DATE)
+        return cls._CIA301_TOD_EPOCH_BYTES
 
 
 def get_current_timeslot(
