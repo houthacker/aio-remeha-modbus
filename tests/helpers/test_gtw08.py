@@ -59,6 +59,12 @@ def test_time_of_day_decode():
     assert TimeOfDay.from_bytes(byte_string, tz.gettz(name="Europe/Amsterdam")) == expected
 
 
+def test_time_of_day_epoch_encode():
+    """Test decoding the CiA 301 base date to bytes."""
+
+    assert TimeOfDay.epoch_bytes() == b"\x00\x00\x00\x00\x00\x00"
+
+
 def test_time_of_day_round_trip():
     """Test that a datetime with milliseconds survives a round trip."""
 
