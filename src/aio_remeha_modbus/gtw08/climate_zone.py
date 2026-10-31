@@ -425,6 +425,10 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """The start time of the holiday mode.
 
         The returned `datetime` is in the configured time zone of `self.time_zone`.
+
+        Returns:
+            datetime | None: The start time, or `None` if it has not been set.
+
         """
 
         if self._holiday_mode_start_time is None:
@@ -437,6 +441,10 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """The end time of the holiday mode.
 
         The returned `datetime` is in the configured time zone of `self.time_zone`.
+
+        Returns:
+            datetime | None: The end time, or `None` if it has not been set.
+
         """
 
         if self._holiday_mode_end_time is None:
@@ -449,6 +457,10 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """The end time of the temporary room setpoint override.
 
         The returned `datetime` is in the configured time zone of `self.time_zone`.
+
+        Returns:
+            datetime | None: The end time, or `None` if it has not been set.
+
         """
 
         if self._temporary_room_setpoint_end_time is None:
