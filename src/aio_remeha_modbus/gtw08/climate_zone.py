@@ -222,7 +222,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """
 
     max_span = REMEHA_MAX_SPAN
-    register_ranges = ((640, 646), (648, 968), (971, 981), (1100, 1120))
+    register_ranges = ((640, 646), (648, 968), (971, 976), (978, 981), (1100, 1120))
 
     type = enum(address=640, enum_type=ClimateZoneType, nan=0xFF)
     """The type of climate zone"""
