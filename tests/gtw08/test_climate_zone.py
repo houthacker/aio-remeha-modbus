@@ -388,7 +388,7 @@ async def test_climate_zone_get_current_temperature(gtw_08):
     assert zone is not None
 
     assert zone.is_domestic_hot_water()
-    assert zone.current_temparature == 53.2
+    assert zone.current_temparature == zone.dhw_tank_temperature_top
 
     update_raw_data(gtw_08, (640 + REMEHA_ZONE_RESERVED_REGISTERS, ClimateZoneType.SWIMMING_POOL))
     await zone.async_update()

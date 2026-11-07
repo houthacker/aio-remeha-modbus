@@ -629,7 +629,12 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             return cast(float, self.room_temperature)
 
         if self.is_domestic_hot_water():
-            return cast(float, self.dhw_tank_temperature)
+            return cast(
+                float,
+                self.dhw_tank_temperature_top
+                if self.dhw_tank_temperature_top is not None
+                else self.dhw_tank_temperature,
+            )
 
         _LOGGER.warning("Current temperature not supported for climate zones of type %s", self.type)
         return -1
