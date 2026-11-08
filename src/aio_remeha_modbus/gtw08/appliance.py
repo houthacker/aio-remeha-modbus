@@ -2,10 +2,8 @@
 
 import inspect
 import logging
-import operator
 from datetime import time
 from enum import IntEnum
-from functools import reduce
 
 from modbus_connection import ModbusUnit
 from modbus_connection.model import (
@@ -601,10 +599,7 @@ class Appliance(RemehaComponent):
 
         if gateway_version is None:
             _LOGGER.info("Could not detect gateway version; using all Appliance fields.")
-            return reduce(
-                operator.or_, [f for fs in cls.restrictions_by_gtw_version.values() for f in fs], {}
-            )
-
+            return {f for fs in cls.restrictions_by_gtw_version.values() for f in fs}
         _LOGGER.info(
             "Using Appliance fields for gateway version %02d.%02d",
             gateway_version[0],

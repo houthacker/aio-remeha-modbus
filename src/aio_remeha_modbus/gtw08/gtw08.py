@@ -195,7 +195,8 @@ class GTW08(Device):
             iter([
                 board
                 for board in self.discovery_table.device_boards
-                if board.board_category.type is DeviceBoardType.GATEWAY
+                if board.board_category is not None
+                and board.board_category.type is DeviceBoardType.GATEWAY
             ]),
             None,
         )
