@@ -50,7 +50,7 @@ from tests.conftest import (
 async def test_read_single_variable(gtw_08: GTW08):
     """Test that the API can be created and a single register be read."""
 
-    assert len(gtw_08.discovery_table.device_boards) == 2
+    assert len(gtw_08.discovery_table.device_boards) == 3
 
 
 @pytest.mark.asyncio
@@ -166,7 +166,7 @@ async def test_azorra_ace_support(remeha_modbus_unit: MockModbusUnit):
     gtw_08 = GTW08("azorra_ace", unit=remeha_modbus_unit, time_zone=tz.gettz(TESTING_TIME_ZONE))
     await gtw_08.async_update()
 
-    assert len(gtw_08.discovery_table.device_boards) == 2
+    assert len(gtw_08.discovery_table.device_boards) == 3
 
     mainboard = gtw_08.discovery_table.device_boards[0]
     assert mainboard.is_mainboard()

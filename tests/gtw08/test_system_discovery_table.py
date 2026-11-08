@@ -157,7 +157,7 @@ async def test_device_board_id_uses_register_stride(remeha_modbus_unit: MockModb
     table = SystemDiscoveryTable(remeha_modbus_unit)
     await table.async_update()
 
-    assert [board.id for board in table.device_boards] == [0, 1]
+    assert [board.id for board in table.device_boards] == [0, 1, 2]
 
 
 @pytest.mark.asyncio
