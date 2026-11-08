@@ -191,9 +191,17 @@ class GTW08(Device):
         # Restrict appliance field availability for certain appliances.
         mainboards = [board for board in self.discovery_table.device_boards if board.is_mainboard()]
         mainboard = mainboards[0] if mainboards else None
+        gateway = next(
+            iter([
+                board
+                for board in self.discovery_table.device_boards
+                if board.board_category.type is DeviceBoardType.GATEWAY
+            ]),
+            None,
+        )
 
-        if mainboard:
-            self.appliance.restrict_fields_for_device(mainboard)
+        if mainboard and gateway:
+            self.appliance.restrict_fields_for_device(mainboard, gateway)
 
         await self.appliance.async_update()
         await self.buffer_tank.async_update()

@@ -1,8 +1,11 @@
 """Implementation of appliance-scoped functionality."""
 
 import inspect
+import logging
+import operator
 from datetime import time
 from enum import IntEnum
+from functools import reduce
 
 from modbus_connection import ModbusUnit
 from modbus_connection.model import (
@@ -18,6 +21,8 @@ from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, SeasonalMode
 from aio_remeha_modbus.gtw08.model import RemehaComponent
 from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoard, DeviceBoardType
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class SilentMode(IntEnum):
@@ -374,6 +379,54 @@ class Appliance(RemehaComponent):
         "digital_input_2_contact_logic",
     }
 
+    restrictions_by_gtw_version: dict[int, set[str]] = {
+        0x0100: {
+            "outside_temperature",
+            "season_mode",
+            "summer_winter",
+            "neutral_band_summer_winter",
+            "flow_temperature",
+            "return_temperature",
+            "heat_pump_flow_temperature",
+            "heat_pump_return_temperature",
+            "actual_water_pressure",
+            "flow_rate",
+            "appliance_status",
+            "appliance_substatus",
+            "actual_relative_power",
+            "generator_starts_total",
+            "generator_hours_total",
+            "backup1_starts",
+            "backup1_hours",
+            "backup2_starts",
+            "backup2_hours",
+            "power_on_hours",
+            "ch_energy_consumption",
+            "dhw_energy_consumption",
+            "cooling_energy_consumption",
+        },
+        0x0101: {"forced_summer_mode", "ch_enabled", "cooling_type", "forced_cooling_mode"},
+        0x0102: {
+            "total_energy_consumption",
+            "backup_energy_consumption",
+            "total_energy_delivery",
+            "ch_energy_delivery",
+            "dhw_energy_delivery",
+            "cooling_energy_delivery",
+            "backup_energy_delivery",
+            "pump_speed",
+            "actual_produced_power",
+        },
+        0x0103: {
+            "cop_calculated",
+            "backup_type",
+            "silent_mode",
+            "silent_mode_start_time",
+            "silent_mode_end_time",
+        },
+    }
+    """Field names indexed by the GTW software version in which they were added to the parameter list."""
+
     max_span = REMEHA_MAX_SPAN
     register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9009, 9012), (9230, 9230))
 
@@ -542,13 +595,37 @@ class Appliance(RemehaComponent):
 
         super().__init__(unit, index, base_offset=base_offset, _instance_offset=_instance_offset)
 
-    def restrict_fields_for_device(self, device: DeviceBoard) -> None:
+    @classmethod
+    def _gateway_restrictions(cls, gateway: DeviceBoard) -> set[str]:
+        gateway_version = gateway.software_version
+
+        if gateway_version is None:
+            _LOGGER.info("Could not detect gateway version; using all Appliance fields.")
+            return reduce(
+                operator.or_, [f for fs in cls.restrictions_by_gtw_version.values() for f in fs], {}
+            )
+
+        _LOGGER.info(
+            "Using Appliance fields for gateway version %02d.%02d",
+            gateway_version[0],
+            gateway_version[1],
+        )
+        merged_version = (gateway_version[0] << 8) | gateway_version[1]
+        return {
+            field
+            for version, version_fields in cls.restrictions_by_gtw_version.items()
+            for field in version_fields
+            if merged_version >= version
+        }
+
+    def restrict_fields_for_device(self, device: DeviceBoard, gateway: DeviceBoard) -> None:
         """Ensure that only fields supported by `device` can be read and written.
 
         This method assumes it is called once, on gateway setup.
 
         Args:
             device (DeviceBoard): The device to restrict field availability by.
+            gateway (DeviceBoard): The modbus gateway board to restrict field availability by.
 
         """
 
@@ -558,31 +635,32 @@ class Appliance(RemehaComponent):
             # restricted fields are only overwritten for DeviceBoardType.CU_HW.
             return
 
-        match board_category.type:
-            case DeviceBoardType.CU_HW:
-                # Restrict sensors that are not supported.
-                self.restrict_fields([
-                    name
-                    for name, _ in inspect.getmembers_static(
-                        Appliance,
-                        lambda member: (
-                            (isinstance(member, (RegisterField, CoilField, DiscreteInputField)))
-                            and member.name not in self._cu_hw_board_unsupported_fields
-                        ),
-                    )
-                ])
-                return
-            case _:
-                self.restrict_fields([
-                    name
-                    for name, _ in inspect.getmembers_static(
-                        Appliance,
-                        lambda member: (
-                            (isinstance(member, (RegisterField, CoilField, DiscreteInputField)))
-                            and member.name not in self._other_board_unsupported_fields
-                        ),
-                    )
-                ])
+        if board_category.type is DeviceBoardType.CU_HW:
+            # Restrict unsupported sensors.
+            self.restrict_fields([
+                name
+                for name, _ in inspect.getmembers_static(
+                    Appliance,
+                    lambda member: (
+                        (isinstance(member, (RegisterField, CoilField, DiscreteInputField)))
+                        and member.name not in self._cu_hw_board_unsupported_fields
+                    ),
+                )
+            ])
+            return
+
+        # Restrict fields by gateway version
+        self.restrict_fields([
+            name
+            for name, _ in inspect.getmembers_static(
+                Appliance,
+                lambda member: (
+                    (isinstance(member, (RegisterField, CoilField, DiscreteInputField)))
+                    and member.name not in self._other_board_unsupported_fields
+                    and member.name in Appliance._gateway_restrictions(gateway)
+                ),
+            )
+        ])
 
     def is_cooling_required(self) -> bool:
         """Whether the appliance cooling mode is required.

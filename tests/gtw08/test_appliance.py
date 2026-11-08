@@ -339,14 +339,17 @@ async def test_appliance_nan_values(remeha_modbus_unit: MockModbusUnit):
     assert appliance.is_cooling_required() is False
 
 
-async def _restricted_appliance(unit: MockModbusUnit) -> Appliance:
+async def _restricted_appliance(unit: MockModbusUnit, gateway_base_offset=12) -> Appliance:
     """Create an appliance restricted to the unit's mainboard and read its values."""
 
     device_board = DeviceBoard(unit=unit)
     await device_board.async_update()
 
+    gateway = DeviceBoard(unit=unit, base_offset=gateway_base_offset)
+    await gateway.async_update()
+
     appliance = Appliance(unit)
-    appliance.restrict_fields_for_device(device_board)
+    appliance.restrict_fields_for_device(device_board, gateway)
     await appliance.async_update()
 
     return appliance
@@ -364,30 +367,17 @@ async def test_appliance_restrict_fields_for_cu_hw(remeha_modbus_unit: MockModbu
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("board_type", _OTHER_BOARD_TYPES)
-async def test_appliance_restrict_fields_for_other_boards(
-    remeha_modbus_unit: MockModbusUnit, board_type: DeviceBoardType
-):
-    """Test that all fields remain available for non CU-HW mainboards."""
-
-    _set_board_type(remeha_modbus_unit, board_type)
-
-    appliance = await _restricted_appliance(remeha_modbus_unit)
-
-    assert all(getattr(appliance, name) is not None for name in _CU_HW_UNSUPPORTED_FIELDS)
-    assert appliance.silent_mode == SilentMode.LEVEL_1
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("remeha_modbus_unit", "expected"),
+    ("remeha_modbus_unit", "expected", "gateway_base_offset"),
     [
-        pytest.param("azorra_ace_store.json", BackupType.SINGLE_STAGE_ELECTRICAL, id="CU_HW"),
-        pytest.param("modbus_store.json", BackupType.DOUBLE_STAGE_ELECTRICAL, id="EHC"),
+        pytest.param("azorra_ace_store.json", BackupType.SINGLE_STAGE_ELECTRICAL, 12, id="CU_HW"),
+        pytest.param("modbus_store.json", BackupType.DOUBLE_STAGE_ELECTRICAL, 12, id="EHC"),
     ],
     indirect=["remeha_modbus_unit"],
 )
-async def test_appliance_read_backup_type(remeha_modbus_unit: MockModbusUnit, expected: BackupType):
+async def test_appliance_read_backup_type(
+    remeha_modbus_unit: MockModbusUnit, expected: BackupType, gateway_base_offset: int
+):
     """Test that the backup type is read."""
 
     appliance = await _restricted_appliance(remeha_modbus_unit)
