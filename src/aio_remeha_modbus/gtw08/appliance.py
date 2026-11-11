@@ -19,6 +19,7 @@ from aio_remeha_modbus.gtw08.const import REMEHA_MAX_SPAN, SeasonalMode
 from aio_remeha_modbus.gtw08.model import RemehaComponent
 from aio_remeha_modbus.gtw08.system_discovery_table import DeviceBoard, DeviceBoardType
 from aio_remeha_modbus.helpers.fields import int16, time_steps, uint8, uint16
+from aio_remeha_modbus.helpers.validation import in_range
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -415,6 +416,9 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             "pump_speed",
             "actual_produced_power",
             "hybrid_internal_dhw_setpoint",
+            "min_time_between_dhw_productions",
+            "max_dhw_production_time",
+            "heat_pump_defrost_active",
         },
         0x0103: {
             "cop_calculated",
@@ -422,6 +426,9 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             "silent_mode",
             "silent_mode_start_time",
             "silent_mode_end_time",
+            "bivalent_temperature",
+            "starting_delay_ch_backup",
+            "heat_pump_compressor_min_temperature",
         },
     }
     """Field names indexed by the GTW software version in which they were added to the parameter list."""
@@ -540,8 +547,32 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     cop_calculated = uint16(address=462, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) (parameter HM031)."""
 
+    min_time_between_dhw_productions = uint8(
+        address=477, writable=in_range(range(0x01, 0xFF)), unit="h"
+    )
+    """The minimum time between two periods of producing DHW."""
+
+    max_dhw_production_time = uint8(address=478, writable=in_range(range(0x01, 0xFF)), unit="h")
+    """Maximum time allowed to produce DHW."""
+
+    heat_pump_defrost_active = boolean(address=481, nan=0xFF)
+    """Heat pump defrost mode active."""
+
     backup_type = enum(address=482, enum_type=BackupType, signed=False, nan=0xFF, writable=True)
     """The type of backup heat source for the heat pump."""
+
+    bivalent_temperature = int16(
+        address=487, scale=0.01, writable=in_range(range(-10, 21)), unit="°C"
+    )
+    """Outside temperature level above which the backup operation is blocked for a standard heating mode."""
+
+    starting_delay_ch_backup = uint16(address=488, writable=in_range(range(601)), unit="min")
+    """Delay for starting the next generator (backup stage) in central heating mode."""
+
+    heat_pump_compressor_min_temperature = int16(
+        address=489, scale=0.01, writable=in_range(range(-20, 6)), unit="°C"
+    )
+    """Minimum outside temperature below which the heat pump compressor is stopped."""
 
     silent_mode = enum(address=490, enum_type=SilentMode, signed=False, nan=0xFF, writable=True)
     """The silent mode level of the appliance."""
@@ -713,6 +744,26 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("forced_summer_mode", False)
 
+    async def async_set_min_time_between_dhw_productions(self, hours: int) -> None:
+        """Set the minimum required time between two DHW productions.
+
+        Args:
+            hours (int): The required time in hours. Must be between 1 and 255.
+
+        """
+
+        await self.write("min_time_between_dhw_productions", hours)
+
+    async def async_set_max_dhw_production_time(self, hours: int) -> None:
+        """Set the maximum allowed duration of DHW production.
+
+        Args:
+            hours (int): The maximum allowed duration in hours. Must be between 1 and 255.
+
+        """
+
+        await self.write("max_dhw_production_time", hours)
+
     async def async_set_backup_type(self, backup_type: BackupType) -> None:
         """Set the backup type for this appliance.
 
@@ -728,6 +779,39 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """
 
         await self.write("backup_type", backup_type)
+
+    async def async_set_bivalent_temperature(self, temperature: int) -> None:
+        """Set the outside temperature above which the backup operation is blocked.
+
+        Args:
+            temperature (float): The temperature in °C. Must be between -10 and 20 °C.
+
+        """
+
+        await self.write("bivalent_temperature", temperature)
+
+    async def async_set_starting_delay_ch_backup(self, minutes: int) -> None:
+        """Set the delay for starting the next generator (backup stage) in central heating mode.
+
+        Args:
+            minutes (int): The delay in minutes. Must be between 0 and 600.
+
+        """
+
+        await self.write("starting_delay_ch_backup", minutes)
+
+    async def async_set_heat_pump_compressor_min_temperature(self, temperature: int) -> None:
+        """Set the minimum outside temperature below which the heat pump compressor is stopped.
+
+        If the outside temperature falls below `temperature`, the heat pump compressor is stopped
+        and backup takes over.
+
+        Args:
+            temperature (int): The minimum temperature in °C. Must be between -20 and 5 °C.
+
+        """
+
+        await self.write("heat_pump_compressor_min_temperature", temperature)
 
     async def async_set_silent_mode(self, value: SilentMode) -> None:
         """Set the silent mode level.
