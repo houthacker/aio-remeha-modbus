@@ -784,7 +784,7 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """Set the outside temperature above which the backup operation is blocked.
 
         Args:
-            temperature (float): The temperature in °C. Must be between -10 and 20 °C.
+            temperature (int): The temperature in °C. Must be between -10 and 20 °C.
 
         """
 
