@@ -414,6 +414,7 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             "backup_energy_delivery",
             "pump_speed",
             "actual_produced_power",
+            "hybrid_internal_dhw_setpoint",
         },
         0x0103: {
             "cop_calculated",
@@ -426,7 +427,15 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Field names indexed by the GTW software version in which they were added to the parameter list."""
 
     max_span = REMEHA_MAX_SPAN
-    register_ranges = ((384, 390), (400, 438), (439, 494), (500, 503), (9009, 9012), (9230, 9230))
+    register_ranges = (
+        (384, 390),
+        (400, 438),
+        (439, 494),
+        (500, 503),
+        (9009, 9012),
+        (9202, 9202),
+        (9230, 9230),
+    )
 
     outside_temperature = int16(address=384, scale=0.01, unit="°C")
     """The outside temperature."""
@@ -585,7 +594,10 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     )
     """Configuration of the default state of digital input 2. Only available for `CU_HW` mainboards."""
 
-    # TODO This is a register for hybrid appliances. If more are required, move to dedicated class.
+    # TODO These are registers for hybrid appliances. If more than 4 are required, move to dedicated class.
+    hybrid_internal_dhw_setpoint = int16(address=9202, scale=0.01)
+    """Internal setpoint used for hot water production."""
+
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) on a hybrid system (parameter HM031)."""
 
