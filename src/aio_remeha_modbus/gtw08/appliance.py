@@ -355,7 +355,7 @@ class ApplianceSubStatus(IntEnum):
     """
 
 
-class Appliance(RemehaComponent):
+class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Represents a Remeha appliance.
 
     An `Appliance` stores information about the appliance that cannot be linked to any of
@@ -545,6 +545,9 @@ class Appliance(RemehaComponent):
 
     ch_enabled = boolean(address=500, nan=0xFF, writable=True)
     """Whether central heating demand processing is enabled."""
+
+    dhw_enabled = boolean(address=501, nan=0xFF, writable=True)
+    """Whether domestic hot water processing is enabled."""
 
     cooling_type = enum(address=502, enum_type=CoolingType, signed=False, nan=0xFF, writable=True)
     """The type of cooling."""
@@ -741,13 +744,21 @@ class Appliance(RemehaComponent):
         """
         await self.write("silent_mode_end_time", end_time)
 
-    async def async_set_ch_enabled(self) -> None:
+    async def async_enable_ch_processing(self) -> None:
         """Enable central heat demand processing."""
         await self.write("ch_enabled", True)
 
-    async def async_set_ch_disabled(self) -> None:
+    async def async_disable_ch_processing(self) -> None:
         """Disable central heat demand processing."""
         await self.write("ch_enabled", False)
+
+    async def async_enable_dhw_processing(self) -> None:
+        """Enable domestic hot water demand processing."""
+        await self.write("dhw_enabled", True)
+
+    async def async_disable_dhw_processing(self) -> None:
+        """Disable domestic hot water demand processing."""
+        await self.write("dhw_enabled", False)
 
     async def async_set_cooling_type(self, value: CoolingType) -> None:
         """Set the type of cooling for this appliance.
