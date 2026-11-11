@@ -238,12 +238,12 @@ async def test_appliance_ch_enabled(remeha_modbus_unit: MockModbusUnit):
     appliance = await _updated_appliance(remeha_modbus_unit)
     assert appliance.ch_enabled is True
 
-    await appliance.async_set_ch_disabled()
+    await appliance.async_disable_ch_processing()
     assert remeha_modbus_unit.holding[500] == 0
     await appliance.async_update()
     assert appliance.ch_enabled is False
 
-    await appliance.async_set_ch_enabled()
+    await appliance.async_enable_ch_processing()
     assert remeha_modbus_unit.holding[500] != 0
     await appliance.async_update()
     assert appliance.ch_enabled is True
