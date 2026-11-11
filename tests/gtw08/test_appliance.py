@@ -121,6 +121,7 @@ async def test_appliance(remeha_modbus_unit: MockModbusUnit):
     assert appliance.ch_enabled
     assert appliance.cooling_type == CoolingType.ACTIVE_COOLING
     assert not appliance.forced_cooling_mode
+    assert appliance.hybrid_internal_dhw_setpoint == 60.0
     assert appliance.hybrid_cop_calculated == 3.5
 
 
