@@ -115,6 +115,12 @@ async def test_appliance(remeha_modbus_unit: MockModbusUnit):
     assert appliance.pump_speed == 5.0
     assert appliance.actual_produced_power == 6562
     assert appliance.cop_calculated == 3.2
+    assert appliance.min_time_between_dhw_productions == 2
+    assert appliance.max_dhw_production_time == 3
+    assert appliance.heat_pump_defrost_active is False
+    assert appliance.bivalent_temperature == 5.0
+    assert appliance.starting_delay_ch_backup == 20
+    assert appliance.heat_pump_compressor_min_temperature == -20.0
     assert appliance.silent_mode == SilentMode.LEVEL_1
     assert appliance.silent_mode_start_time == time(hour=22)
     assert appliance.silent_mode_end_time == time(hour=7)
@@ -148,6 +154,55 @@ async def _updated_appliance(unit: MockModbusUnit) -> Appliance:
     await appliance.async_update()
 
     return appliance
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["appliance.json"], indirect=True)
+@pytest.mark.parametrize(
+    ("field", "address", "value", "raw"),
+    [
+        pytest.param("min_time_between_dhw_productions", 477, 255, 255, id="DP048"),
+        pytest.param("max_dhw_production_time", 478, 1, 1, id="DP047"),
+        pytest.param("bivalent_temperature", 487, -10, -1000 & 0xFFFF, id="HP000"),
+        pytest.param("starting_delay_ch_backup", 488, 600, 600, id="HP030"),
+        pytest.param("heat_pump_compressor_min_temperature", 489, 5, 500, id="HP051"),
+    ],
+)
+async def test_appliance_set_bounded_parameter(
+    remeha_modbus_unit: MockModbusUnit, field: str, address: int, value: int, raw: int
+):
+    """Test that bounded parameters can be written at their range limits."""
+
+    appliance = await _updated_appliance(remeha_modbus_unit)
+
+    await getattr(appliance, f"async_set_{field}")(value)
+
+    assert remeha_modbus_unit.holding[address] == raw
+    await appliance.async_update()
+    assert getattr(appliance, field) == value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["appliance.json"], indirect=True)
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("min_time_between_dhw_productions", 0, id="DP048"),
+        pytest.param("max_dhw_production_time", 256, id="DP047"),
+        pytest.param("bivalent_temperature", 21, id="HP000"),
+        pytest.param("starting_delay_ch_backup", 601, id="HP030"),
+        pytest.param("heat_pump_compressor_min_temperature", -21, id="HP051"),
+    ],
+)
+async def test_appliance_set_bounded_parameter_out_of_range(
+    remeha_modbus_unit: MockModbusUnit, field: str, value: int
+):
+    """Test that bounded parameters reject values outside their range."""
+
+    appliance = await _updated_appliance(remeha_modbus_unit)
+
+    with pytest.raises(ValueError, match=f"Value {value} not in"):
+        await getattr(appliance, f"async_set_{field}")(value)
 
 
 @pytest.mark.asyncio
