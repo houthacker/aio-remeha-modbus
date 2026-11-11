@@ -548,11 +548,11 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Instantaneous calculated Coefficient of Performance (COP) (parameter HM031)."""
 
     min_time_between_dhw_productions = uint8(
-        address=477, writable=in_range(range(0x01, 0xFF)), unit="h"
+        address=477, writable=in_range(range(0x01, 0x0100)), unit="h"
     )
     """The minimum time between two periods of producing DHW."""
 
-    max_dhw_production_time = uint8(address=478, writable=in_range(range(0x01, 0xFF)), unit="h")
+    max_dhw_production_time = uint8(address=478, writable=in_range(range(0x01, 0x0100)), unit="h")
     """Maximum time allowed to produce DHW."""
 
     heat_pump_defrost_active = boolean(address=481, nan=0xFF)
