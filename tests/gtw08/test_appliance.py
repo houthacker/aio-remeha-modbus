@@ -232,21 +232,26 @@ async def test_appliance_set_silent_mode_times(remeha_modbus_unit: MockModbusUni
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("remeha_modbus_unit", ["appliance.json"], indirect=True)
-async def test_appliance_ch_enabled(remeha_modbus_unit: MockModbusUnit):
-    """Test that central heating can be disabled and enabled."""
+@pytest.mark.parametrize(
+    ("kind", "address"), [pytest.param("ch", 500, id="ch"), pytest.param("dhw", 501, id="dhw")]
+)
+async def test_appliance_demand_processing(
+    remeha_modbus_unit: MockModbusUnit, kind: str, address: int
+):
+    """Test that demand processing can be disabled and enabled."""
 
     appliance = await _updated_appliance(remeha_modbus_unit)
-    assert appliance.ch_enabled is True
+    assert getattr(appliance, f"{kind}_enabled") is True
 
-    await appliance.async_disable_ch_processing()
-    assert remeha_modbus_unit.holding[500] == 0
+    await getattr(appliance, f"async_disable_{kind}_processing")()
+    assert remeha_modbus_unit.holding[address] == 0
     await appliance.async_update()
-    assert appliance.ch_enabled is False
+    assert getattr(appliance, f"{kind}_enabled") is False
 
-    await appliance.async_enable_ch_processing()
-    assert remeha_modbus_unit.holding[500] != 0
+    await getattr(appliance, f"async_enable_{kind}_processing")()
+    assert remeha_modbus_unit.holding[address] != 0
     await appliance.async_update()
-    assert appliance.ch_enabled is True
+    assert getattr(appliance, f"{kind}_enabled") is True
 
 
 @pytest.mark.asyncio
