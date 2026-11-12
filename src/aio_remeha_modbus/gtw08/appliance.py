@@ -780,11 +780,11 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("backup_type", backup_type)
 
-    async def async_set_bivalent_temperature(self, temperature: int) -> None:
+    async def async_set_bivalent_temperature(self, temperature: float) -> None:
         """Set the outside temperature above which the backup operation is blocked.
 
         Args:
-            temperature (int): The temperature in °C. Must be between -10 and 20 °C.
+            temperature (float): The temperature in °C. Must be between -10 and 20 °C.
 
         """
 
@@ -800,14 +800,14 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("starting_delay_ch_backup", minutes)
 
-    async def async_set_heat_pump_compressor_min_temperature(self, temperature: int) -> None:
+    async def async_set_heat_pump_compressor_min_temperature(self, temperature: float) -> None:
         """Set the minimum outside temperature below which the heat pump compressor is stopped.
 
         If the outside temperature falls below `temperature`, the heat pump compressor is stopped
         and backup takes over.
 
         Args:
-            temperature (int): The minimum temperature in °C. Must be between -20 and 5 °C.
+            temperature (float): The minimum temperature in °C. Must be between -20 and 5 °C.
 
         """
 
