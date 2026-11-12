@@ -547,16 +547,14 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     cop_calculated = uint16(address=462, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) (parameter HM031)."""
 
-    min_time_between_dhw_productions = uint8(
-        address=477, writable=in_range(range(0x01, 0x0100)), unit="h"
-    )
+    min_time_between_dhw_productions = uint8(address=477, writable=in_range(range(11)), unit="h")
     """The minimum time between two periods of producing DHW."""
 
-    max_dhw_production_time = uint8(address=478, writable=in_range(range(0x01, 0x0100)), unit="h")
+    max_dhw_production_time = uint8(address=478, writable=in_range(range(1, 11)), unit="h")
     """Maximum time allowed to produce DHW."""
 
     heat_pump_defrost_active = boolean(address=481, nan=0xFF)
-    """Heat pump defrost mode active."""
+    """Heat pump defrost mode active (parameter HM009)."""
 
     backup_type = enum(address=482, enum_type=BackupType, signed=False, nan=0xFF, writable=True)
     """The type of backup heat source for the heat pump."""
@@ -744,21 +742,21 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("forced_summer_mode", False)
 
-    async def async_set_min_time_between_dhw_productions(self, hours: int) -> None:
+    async def async_set_min_time_between_dhw_productions(self, hours: float) -> None:
         """Set the minimum required time between two DHW productions.
 
         Args:
-            hours (int): The required time in hours. Must be between 1 and 255.
+            hours (float): The required time in hours. Must be between 0 and 10.
 
         """
 
         await self.write("min_time_between_dhw_productions", hours)
 
-    async def async_set_max_dhw_production_time(self, hours: int) -> None:
+    async def async_set_max_dhw_production_time(self, hours: float) -> None:
         """Set the maximum allowed duration of DHW production.
 
         Args:
-            hours (int): The maximum allowed duration in hours. Must be between 1 and 255.
+            hours (float): The maximum allowed duration in hours. Must be between 1 and 10.
 
         """
 
@@ -790,11 +788,11 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("bivalent_temperature", temperature)
 
-    async def async_set_starting_delay_ch_backup(self, minutes: int) -> None:
+    async def async_set_starting_delay_ch_backup(self, minutes: float) -> None:
         """Set the delay for starting the next generator (backup stage) in central heating mode.
 
         Args:
-            minutes (int): The delay in minutes. Must be between 0 and 600.
+            minutes (float): The delay in minutes. Must be between 0 and 600.
 
         """
 

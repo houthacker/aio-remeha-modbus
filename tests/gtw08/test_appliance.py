@@ -161,7 +161,7 @@ async def _updated_appliance(unit: MockModbusUnit) -> Appliance:
 @pytest.mark.parametrize(
     ("field", "address", "value", "raw"),
     [
-        pytest.param("min_time_between_dhw_productions", 477, 255, 255, id="DP048"),
+        pytest.param("min_time_between_dhw_productions", 477, 10, 10, id="DP048"),
         pytest.param("max_dhw_production_time", 478, 1, 1, id="DP047"),
         pytest.param("bivalent_temperature", 487, -10, -1000 & 0xFFFF, id="HP000"),
         pytest.param("starting_delay_ch_backup", 488, 600, 600, id="HP030"),
@@ -187,8 +187,8 @@ async def test_appliance_set_bounded_parameter(
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        pytest.param("min_time_between_dhw_productions", 0, id="DP048"),
-        pytest.param("max_dhw_production_time", 256, id="DP047"),
+        pytest.param("min_time_between_dhw_productions", 11, id="DP048"),
+        pytest.param("max_dhw_production_time", 11, id="DP047"),
         pytest.param("bivalent_temperature", 21, id="HP000"),
         pytest.param("starting_delay_ch_backup", 601, id="HP030"),
         pytest.param("heat_pump_compressor_min_temperature", -21, id="HP051"),
