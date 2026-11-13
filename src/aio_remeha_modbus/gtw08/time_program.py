@@ -72,6 +72,13 @@ class TimeslotSetpointType(IntEnum):
     EVENING = int("40", 16)
     """Setpoint in 'evening' mode."""
 
+    CUSTOM = int("50", 16)
+    """
+    Setpoint in 'custom' mode.
+    This writes the setpoint temperature directly to the schedule, instead
+    of the `TimeslotActivity`.
+    """
+
 
 @dataclass(frozen=True)
 class Timeslot:
