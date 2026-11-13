@@ -77,9 +77,9 @@ def read_day_schedule(unit: MockModbusUnit, address: int) -> bytes:
 
 
 def corrupt_day_schedule(unit: MockModbusUnit, address: int) -> None:
-    """Write a schedule with one slot that has an unknown activity byte."""
+    """Write a schedule with one slot that has a CUSTOM setpoint_type and a setpoint of 5.0 degrees (below minimum)"""
 
-    for offset, word in enumerate(encode_bytes(bytes.fromhex("01 ff 10 24") + bytes(16))):
+    for offset, word in enumerate(encode_bytes(bytes.fromhex("01 50 05 24") + bytes(16))):
         unit.holding[address + offset] = word
 
 

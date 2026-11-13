@@ -15,6 +15,9 @@ from aio_remeha_modbus.gtw08.const import (
     REMEHA_MAX_SPAN,
     REMEHA_TIME_PROGRAM_BYTE_SIZE,
     REMEHA_TIME_PROGRAM_SLOT_SIZE,
+    TIMESLOT_MAX_SETPOINT,
+    TIMESLOT_MIN_SETPOINT,
+    TIMESLOT_SETPOINT_SCALE,
     Weekday,
 )
 from aio_remeha_modbus.gtw08.errors import InvalidZoneSchedule
@@ -39,14 +42,6 @@ class TimeslotActivity(IntEnum):
     The primary DHW circuit is the circuit that
     carries the heat to a DHW cylinder or heat exchanger.
     It never mixes with the actual drinking water.
-    """
-
-    DHW_ALT = 0xE6
-    """Another DHW activity.
-
-    What differs from DHW, DHW_PRIMARY hasn't been
-    decoded yet but there are some (newer) appliances using this kind
-    of activity.
     """
 
 
@@ -87,22 +82,40 @@ class Timeslot:
     setpoint_type: TimeslotSetpointType
     """The type of setpoint for this time slot."""
 
-    activity: TimeslotActivity
-    """The type of activity for this time slot."""
+    activity: TimeslotActivity | float
+    """
+    The type of activity or the discrete setpoint for this time slot.
+    This library only uses this value if the ``setpoint_type`` is
+    ``TimeslotSetpointType.CUSTOM``. Otherwise, it reads from the
+    designated registers per activity type.
+
+    The GTW-08 ensures that these are written to correctly, even if
+    a device like the eTwist encodes the setpoints here directly.
+    """
 
     switch_time: time
     """The start time of this time slot."""
+
+    def __post_init__(self) -> None:
+        """Verify setpoint on CUSTOM setpoint_type."""
+
+        if self.setpoint_type is TimeslotSetpointType.CUSTOM:
+            if self.activity < TIMESLOT_MIN_SETPOINT or self.activity > TIMESLOT_MAX_SETPOINT:
+                raise ValueError(
+                    f"Invalid time slot: setpoint for CUSTOM setpoint type must be between {TIMESLOT_MIN_SETPOINT} and {TIMESLOT_MAX_SETPOINT}; got {self.activity}."
+                )
 
     def encode(self) -> bytes:
         """Encode this time slot into a `bytes` object."""
 
         time_steps: int = SteppedTimeOfDay.to_steps(self.switch_time)
 
-        return (
-            int(self.activity.value).to_bytes()
-            + int(self.setpoint_type.value).to_bytes()
-            + time_steps.to_bytes()
-        )
+        if isinstance(self.activity, TimeslotActivity):
+            activity_bytes = int(self.activity.value).to_bytes()
+        else:
+            activity_bytes = int(self.activity / TIMESLOT_SETPOINT_SCALE).to_bytes()
+
+        return activity_bytes + int(self.setpoint_type.value).to_bytes() + time_steps.to_bytes()
 
     def __lt__(self, other: object) -> bool:
         """Compare this `Timeslot` to another."""
@@ -157,7 +170,14 @@ class Timeslot:
 
         time_steps = int.from_bytes(encoded_time_slot[2:3])
         setpoint_type = TimeslotSetpointType(int.from_bytes(encoded_time_slot[1:2]))
-        activity = TimeslotActivity(int.from_bytes(encoded_time_slot[:1]))
+        raw_activity = int.from_bytes(encoded_time_slot[:1])
+
+        if setpoint_type is TimeslotSetpointType.CUSTOM or raw_activity not in list(
+            TimeslotActivity
+        ):
+            activity = float(raw_activity * TIMESLOT_SETPOINT_SCALE)
+        else:
+            activity = TimeslotActivity(raw_activity)
 
         return cls(
             activity=activity,

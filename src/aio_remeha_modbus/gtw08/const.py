@@ -63,6 +63,15 @@ PV_MAX_TILT_DEGREES: Final[int] = 90
 WATER_SPECIFIC_HEAT_CAPACITY_KJ: Final[float] = 4.18
 """The amount of energy required to warm 1 kilogram of water by one degree K"""
 
+TIMESLOT_MIN_SETPOINT = 6.0
+"""The minimum setpoint value of a `Timeslot`"""
+
+TIMESLOT_MAX_SETPOINT = 25.5
+"""The maximum setpoint value of a `Timeslot`"""
+
+TIMESLOT_SETPOINT_SCALE = 0.1
+"""The setpoint scale in a `Timeslot`"""
+
 
 class BoilerEnergyLabel(StrEnum):
     """Energy label for DHW boiler.

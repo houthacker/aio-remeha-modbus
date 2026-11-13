@@ -1,5 +1,6 @@
 """Tests for the time program encoding."""
 
+import itertools
 from datetime import time
 
 import pytest
@@ -49,8 +50,18 @@ def test_timeslot_decode():
     )
 
 
-@pytest.mark.parametrize("activity", list(TimeslotActivity))
-@pytest.mark.parametrize("setpoint_type", list(TimeslotSetpointType))
+@pytest.mark.parametrize(
+    ("activity", "setpoint_type"),
+    [
+        (20.5, TimeslotSetpointType.CUSTOM),
+        *list(
+            itertools.product(
+                list(TimeslotActivity),
+                [x for x in list(TimeslotSetpointType) if x is not TimeslotSetpointType.CUSTOM],
+            )
+        ),
+    ],
+)
 def test_timeslot_round_trip(activity: TimeslotActivity, setpoint_type: TimeslotSetpointType):
     """Test that decoding an encoded timeslot gives the same timeslot."""
 
@@ -77,10 +88,7 @@ def test_timeslot_decode_unknown_values():
     """Test that an unknown activity or setpoint type is refused."""
 
     with pytest.raises(ValueError, match="is not a valid TimeslotSetpointType"):
-        Timeslot.decode(bytes.fromhex("c8ff00"))
-
-    with pytest.raises(ValueError, match="is not a valid TimeslotActivity"):
-        Timeslot.decode(bytes.fromhex("aa1000"))
+        Timeslot.decode(bytes.fromhex("500524"))
 
 
 @pytest.mark.parametrize(
