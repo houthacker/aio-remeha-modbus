@@ -18,13 +18,14 @@ from aio_remeha_modbus.gtw08.time_program import (
     time_slots,
 )
 from aio_remeha_modbus.helpers.fields import decode_bytes, encode_bytes
+from tests.conftest import json_fixture
 
 
 def _slot(
     hour: int,
     minute: int = 0,
     setpoint_type: TimeslotSetpointType = TimeslotSetpointType.COMFORT,
-    activity: TimeslotActivity = TimeslotActivity.HEAT_COOL,
+    activity: TimeslotActivity | float = TimeslotActivity.HEAT_COOL,
 ) -> Timeslot:
     """Create a `Timeslot`."""
 
@@ -246,6 +247,59 @@ def test_time_slots_factory():
     assert isinstance(field, TimeProgramField)
     assert field.address == 899
     assert field.count == 10
+
+
+def _fixture_words(file_name: str) -> list[int]:
+    """Return the registers of a recorded day schedule."""
+
+    return [int(word, 16) for word in json_fixture(file_name)["server"]["registers"].values()]
+
+
+@pytest.mark.parametrize(
+    ("file_name", "expected"),
+    [
+        pytest.param(
+            "etwist_heating_schedule.json",
+            [
+                _slot(5, 30, TimeslotSetpointType.COMFORT, 21.5),
+                _slot(12, 40, TimeslotSetpointType.MORNING, TimeslotActivity.HEAT_COOL),
+                _slot(16, 20, TimeslotSetpointType.EVENING, 22.0),
+                _slot(20, 0, TimeslotSetpointType.AWAY, 21.0),
+                _slot(23, 0, TimeslotSetpointType.CUSTOM, 23.0),
+            ],
+            id="heating",
+        ),
+        pytest.param(
+            "etwist_cooling_schedule.json",
+            [
+                _slot(6, 0, TimeslotSetpointType.COMFORT, 21.0),
+                _slot(8, 0, TimeslotSetpointType.MORNING, 23.0),
+                _slot(18, 0, TimeslotSetpointType.EVENING, 22.0),
+                _slot(20, 0, TimeslotSetpointType.CUSTOM, 21.5),
+                _slot(23, 0, TimeslotSetpointType.ECO, 20.5),
+            ],
+            id="cooling",
+        ),
+        pytest.param(
+            "etwist_dhw_schedule.json",
+            [
+                _slot(0, 0, TimeslotSetpointType.ECO, TimeslotActivity.DHW),
+                _slot(10, 30, TimeslotSetpointType.COMFORT, TimeslotActivity.HEAT_COOL),
+                _slot(13, 30, TimeslotSetpointType.COMFORT, TimeslotActivity.DHW),
+                _slot(16, 0, TimeslotSetpointType.ECO, TimeslotActivity.DHW),
+            ],
+            id="dhw",
+        ),
+    ],
+)
+def test_time_program_field_etwist_schedule(file_name: str, expected: list[Timeslot]):
+    """Test decoding and re-encoding real-world schedules written by an eTwist."""
+
+    field = time_slots(address=1)
+    words = _fixture_words(file_name)
+
+    assert field.decode(words) == expected
+    assert field.encode(expected) == words
 
 
 @pytest.mark.asyncio
