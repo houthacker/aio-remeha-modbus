@@ -2,7 +2,6 @@
 
 import logging
 from datetime import UTC, datetime, time, timedelta, tzinfo
-from types import SimpleNamespace
 from typing import Final
 
 import pytest
@@ -1239,34 +1238,17 @@ async def test_climate_zone_ch_scheduling_without_time_slots(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "method", ["_get_cooling_scheduling_setpoint", "_get_heating_scheduling_setpoint"]
-)
-async def test_climate_zone_scheduling_setpoint_unknown_type(
-    gtw_08: GTW08, method: str, caplog: pytest.LogCaptureFixture
-):
-    """Test that a setpoint type that is not known gives no setpoint, and a warning."""
-
-    zone = gtw_08.zones[0]
-
-    with caplog.at_level(logging.WARNING):
-        assert getattr(zone, method)(SimpleNamespace(name="BOGUS")) is None
-
-    assert "Unknown setpoint type BOGUS for climate zone 1" in caplog.text
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("setpoint_type", "field"),
+    ("time_slot", "field"),
     [
-        (TimeslotSetpointType.ECO, 1),
-        (TimeslotSetpointType.COMFORT, 2),
-        (TimeslotSetpointType.AWAY, 3),
-        (TimeslotSetpointType.MORNING, 4),
-        (TimeslotSetpointType.EVENING, 5),
+        (Timeslot(TimeslotSetpointType.ECO, TimeslotActivity.HEAT_COOL, time(hour=0)), 1),
+        (Timeslot(TimeslotSetpointType.COMFORT, TimeslotActivity.HEAT_COOL, time(hour=0)), 2),
+        (Timeslot(TimeslotSetpointType.AWAY, TimeslotActivity.HEAT_COOL, time(hour=0)), 3),
+        (Timeslot(TimeslotSetpointType.MORNING, TimeslotActivity.HEAT_COOL, time(hour=0)), 4),
+        (Timeslot(TimeslotSetpointType.EVENING, TimeslotActivity.HEAT_COOL, time(hour=0)), 5),
     ],
 )
 async def test_climate_zone_scheduling_setpoint_mapping(
-    gtw_08: GTW08, setpoint_type: TimeslotSetpointType, field: int
+    gtw_08: GTW08, time_slot: Timeslot, field: int
 ):
     """Test which setpoint belongs to which timeslot setpoint type."""
 
@@ -1277,8 +1259,8 @@ async def test_climate_zone_scheduling_setpoint_mapping(
     )
     await zone.async_update()
 
-    assert zone._get_heating_scheduling_setpoint(setpoint_type) == (200 + field) / 10  # noqa: SLF001
-    assert zone._get_cooling_scheduling_setpoint(setpoint_type) == (250 + field) / 10  # noqa: SLF001
+    assert zone._get_heating_scheduling_setpoint(time_slot) == (200 + field) / 10  # noqa: SLF001
+    assert zone._get_cooling_scheduling_setpoint(time_slot) == (250 + field) / 10  # noqa: SLF001
 
 
 @pytest.mark.asyncio

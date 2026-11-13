@@ -470,8 +470,8 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             data=self._temporary_room_setpoint_end_time, time_zone=self.time_zone
         )
 
-    def _get_cooling_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float | None:
-        match setpoint_type:
+    def _get_cooling_scheduling_setpoint(self, time_slot: Timeslot) -> float | None:
+        match time_slot.setpoint_type:
             case TimeslotSetpointType.ECO:
                 return self.room_cooling_setpoint_1
             case TimeslotSetpointType.COMFORT:
@@ -482,12 +482,13 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 return self.room_cooling_setpoint_4
             case TimeslotSetpointType.EVENING:
                 return self.room_cooling_setpoint_5
+            case TimeslotSetpointType.CUSTOM:
+                return float(time_slot.activity)
 
-        _LOGGER.warning("Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id)
         return None
 
-    def _get_heating_scheduling_setpoint(self, setpoint_type: TimeslotSetpointType) -> float | None:
-        match setpoint_type:
+    def _get_heating_scheduling_setpoint(self, time_slot: Timeslot) -> float | None:
+        match time_slot.setpoint_type:
             case TimeslotSetpointType.ECO:
                 return self.room_setpoint_1
             case TimeslotSetpointType.COMFORT:
@@ -498,8 +499,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 return self.room_setpoint_4
             case TimeslotSetpointType.EVENING:
                 return self.room_setpoint_5
+            case TimeslotSetpointType.CUSTOM:
+                return float(time_slot.activity)
 
-        _LOGGER.warning("Unknown setpoint type %s for climate zone %d", setpoint_type.name, self.id)
         return None
 
     def _get_current_ch_scheduling_setpoint(self) -> float | None:
@@ -509,7 +511,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 and self.temporary_room_setpoint_end_time >= datetime.now(tz=self.time_zone)
             ):
                 # A setpoint override is currently active.
-                return cast(float, self.temporary_room_setpoint)
+                return self.temporary_room_setpoint
 
         schedule = self.current_schedule
         current_timeslot: Timeslot | None = get_current_timeslot(
@@ -529,9 +531,9 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             return None
 
         if self.selected_schedule.is_cooling_schedule():
-            return self._get_cooling_scheduling_setpoint(current_timeslot.setpoint_type)
+            return self._get_cooling_scheduling_setpoint(current_timeslot)
 
-        return self._get_heating_scheduling_setpoint(current_timeslot.setpoint_type)
+        return self._get_heating_scheduling_setpoint(current_timeslot)
 
     def _get_current_dhw_scheduling_setpoint(self) -> float | None:
         if self.temporary_room_setpoint_end_time is not None:
@@ -540,7 +542,7 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
                 and self.temporary_room_setpoint_end_time >= datetime.now(tz=self.time_zone)
             ):
                 # A setpoint override is currently active.
-                return cast(float, self.temporary_room_setpoint)
+                return self.temporary_room_setpoint
 
         current_timeslot: Timeslot | None = get_current_timeslot(
             schedule=self.current_schedule, time_zone=self.time_zone
