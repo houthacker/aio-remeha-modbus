@@ -1,12 +1,13 @@
 """Modbus components related to climate zone time programs."""
 
+import inspect
 from collections.abc import Iterator
 from datetime import time
 from enum import IntEnum
 from typing import Self, override
 
 from modbus_connection import WordOrder
-from modbus_connection.model import RegisterField, WriteValidator, repeating_group
+from modbus_connection.model import RegisterField, ResolvedField, WriteValidator, repeating_group
 from pydantic.dataclasses import dataclass
 
 from aio_remeha_modbus.gtw08.const import (
@@ -20,6 +21,7 @@ from aio_remeha_modbus.gtw08.errors import InvalidZoneSchedule
 from aio_remeha_modbus.gtw08.model import RemehaComponent
 from aio_remeha_modbus.helpers.fields import decode_bytes, encode_bytes
 from aio_remeha_modbus.helpers.gtw08 import SteppedTimeOfDay
+from aio_remeha_modbus.helpers.inspect_errors import search_stack_locals
 
 
 class TimeslotActivity(IntEnum):
@@ -206,7 +208,17 @@ class TimeProgramField(RegisterField[list[Timeslot]]):
         try:
             return [time_slot for time_slot in list(_decode_timeslots()) if time_slot is not None]
         except ValueError as ex:
-            raise InvalidZoneSchedule(translation_key="invalid_time_program") from ex
+            resolved_field = search_stack_locals(ResolvedField, inspect.stack())
+
+            if resolved_field:
+                raise InvalidZoneSchedule(
+                    translation_key="invalid_time_program",
+                    translation_placeholders={"address": resolved_field.address},
+                ) from ex
+
+            raise InvalidZoneSchedule(
+                translation_key="invalid_time_program_unknown_address"
+            ) from ex
 
     @override
     def encode(self, value: list[Timeslot], scale_exponent: int | None = None) -> list[int]:

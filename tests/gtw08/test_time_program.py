@@ -208,7 +208,7 @@ def test_time_program_field_decode_invalid_slot():
     with pytest.raises(InvalidZoneSchedule) as exc_info:
         time_slots(address=1).decode(words)
 
-    assert exc_info.value.translation_key == "invalid_time_program"
+    assert exc_info.value.translation_key == "invalid_time_program_unknown_address"
 
 
 def test_time_program_field_round_trip():
