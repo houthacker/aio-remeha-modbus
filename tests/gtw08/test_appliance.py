@@ -2,10 +2,12 @@
 
 from collections.abc import Callable, Coroutine
 from datetime import time
+from inspect import getmembers_static
 from typing import Any
 
 import pytest
 from modbus_connection.mock import MockModbusUnit
+from modbus_connection.model import CoilField, DiscreteInputField, RegisterField
 
 from aio_remeha_modbus.gtw08.appliance import (
     Appliance,
@@ -545,3 +547,19 @@ async def test_appliance_set_digital_inputs_other_boards(
 
     with pytest.raises(AttributeError, match=field):
         await setter(appliance, value)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        pytest.param(name, id=name)
+        for name, _ in getmembers_static(
+            Appliance,
+            lambda member: isinstance(member, (RegisterField, CoilField, DiscreteInputField)),
+        )
+    ],
+)
+def test_appliance_fields_have_gtw_version_restriction(field: str):
+    """Test that every appliance field is listed in some GTW version restriction set."""
+
+    assert any(field in fields for fields in Appliance.restrictions_by_gtw_version.values())
