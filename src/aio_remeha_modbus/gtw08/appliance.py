@@ -404,7 +404,13 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             "dhw_energy_consumption",
             "cooling_energy_consumption",
         },
-        0x0101: {"forced_summer_mode", "ch_enabled", "cooling_type", "forced_cooling_mode"},
+        0x0101: {
+            "forced_summer_mode",
+            "ch_enabled",
+            "dhw_enabled",
+            "cooling_type",
+            "forced_cooling_mode",
+        },
         0x0102: {
             "total_energy_consumption",
             "backup_energy_consumption",
