@@ -425,6 +425,11 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             "min_time_between_dhw_productions",
             "max_dhw_production_time",
             "heat_pump_defrost_active",
+            "hybrid_cop_calculated",
+            "digital_input_1_configuration",
+            "digital_input_2_configuration",
+            "digital_input_1_contact_logic",
+            "digital_input_2_contact_logic",
         },
         0x0103: {
             "cop_calculated",
