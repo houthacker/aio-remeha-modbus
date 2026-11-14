@@ -635,7 +635,7 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Configuration of the default state of digital input 2. Only available for `CU_HW` mainboards."""
 
     # TODO These are registers for hybrid appliances. If more than 4 are required, move to dedicated class.
-    hybrid_internal_dhw_setpoint = int16(address=9202, scale=0.01)
+    hybrid_internal_dhw_setpoint = uint16(address=9202, scale=0.01)
     """Internal setpoint used for hot water production."""
 
     hybrid_cop_calculated = uint16(address=9230, scale=0.001)
