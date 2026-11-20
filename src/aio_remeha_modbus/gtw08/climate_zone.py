@@ -102,7 +102,7 @@ class ClimateZoneActivity(IntEnum):
 
     COMFORT = 2
 
-    LEGIONEL = 3
+    LEGIONNEL = 3
 
 
 class ClimateZoneHeatingMode(IntEnum):
