@@ -12,6 +12,7 @@ from modbus_connection.mock import MockModbusUnit
 from aio_remeha_modbus.gtw08 import GTW08
 from aio_remeha_modbus.gtw08.climate_zone import (
     ClimateZone,
+    ClimateZoneActivity,
     ClimateZoneFunction,
     ClimateZoneMode,
     ClimateZoneRunningMode,
@@ -792,6 +793,40 @@ async def test_climate_zone_set_mode(gtw_08: GTW08):
         assert unit.holding[649] == mode.value
         await zone.async_update()
         assert zone.mode is mode
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_activity(gtw_08: GTW08):
+    """Test that the activity of each zone is read from the store."""
+
+    assert gtw_08.zones[0].activity is ClimateZoneActivity.COMFORT
+    assert gtw_08.zones[1].activity is ClimateZoneActivity.COMFORT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("activity", list(ClimateZoneActivity))
+@pytest.mark.parametrize("zone_index", [pytest.param(0, id="ch"), pytest.param(1, id="dhw")])
+async def test_climate_zone_activity_values(
+    gtw_08: GTW08, zone_index: int, activity: ClimateZoneActivity
+):
+    """Test that every activity is read from the register of the zone."""
+
+    zone = gtw_08.zones[zone_index]
+    update_raw_data(gtw_08, (1107 + zone_index * REMEHA_ZONE_RESERVED_REGISTERS, activity))
+    await gtw_08.async_update()
+
+    assert zone.activity is activity
+
+
+@pytest.mark.asyncio
+async def test_climate_zone_activity_not_available(gtw_08: GTW08):
+    """Test that an unavailable activity is read as None."""
+
+    zone = gtw_08.zones[0]
+    update_raw_data(gtw_08, (1107, 0xFF))
+    await zone.async_update()
+
+    assert zone.activity is None
 
 
 @pytest.mark.asyncio
