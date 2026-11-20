@@ -14,6 +14,8 @@ from aio_remeha_modbus.gtw08.appliance import (
     ApplianceStatus,
     ApplianceSubStatus,
     BackupType,
+    BlockingInputActivation,
+    BlockingInputSetting,
     CoolingType,
     DIContactLogicConfiguration,
     DigitalInputConfiguration,
@@ -59,6 +61,38 @@ _DIGITAL_INPUT_FIELDS: tuple[
         9012,
         DIContactLogicConfiguration,
         Appliance.async_set_digital_input_2_contact_logic,
+    ),
+)
+
+type _BlockingInputValue = BlockingInputActivation | BlockingInputSetting
+type _BlockingInputSetter = Callable[[Appliance, Any], Coroutine[Any, Any, None]]
+
+_BLOCKING_INPUT_FIELDS: tuple[
+    tuple[str, int, type[_BlockingInputValue], _BlockingInputSetter], ...
+] = (
+    (
+        "blocking_input_1_activation",
+        473,
+        BlockingInputActivation,
+        Appliance.async_set_blocking_input_1_activation,
+    ),
+    (
+        "blocking_input_2_activation",
+        474,
+        BlockingInputActivation,
+        Appliance.async_set_blocking_input_2_activation,
+    ),
+    (
+        "blocking_input_2_setting",
+        475,
+        BlockingInputSetting,
+        Appliance.async_set_blocking_input_2_setting,
+    ),
+    (
+        "blocking_input_1_setting",
+        476,
+        BlockingInputSetting,
+        Appliance.async_set_blocking_input_1_setting,
     ),
 )
 
@@ -117,6 +151,10 @@ async def test_appliance(remeha_modbus_unit: MockModbusUnit):
     assert appliance.pump_speed == 5.0
     assert appliance.actual_produced_power == 6562
     assert appliance.cop_calculated == 3.2
+    assert appliance.blocking_input_1_activation is BlockingInputActivation.OPEN
+    assert appliance.blocking_input_2_activation is BlockingInputActivation.CLOSED
+    assert appliance.blocking_input_2_setting is BlockingInputSetting.FULL_BLOCKING
+    assert appliance.blocking_input_1_setting is BlockingInputSetting.HIGH_LOW_TARIFF
     assert appliance.min_time_between_dhw_productions == 2
     assert appliance.max_dhw_production_time == 3
     assert appliance.heat_pump_defrost_active is False
@@ -390,9 +428,12 @@ async def test_appliance_nan_values(remeha_modbus_unit: MockModbusUnit):
     remeha_modbus_unit.holding[490] = 0xFF  # silent_mode
     remeha_modbus_unit.holding[491] = 0xFF  # silent_mode_start_time
     remeha_modbus_unit.holding[482] = 0xFF  # backup_type
+    for _, address, _, _ in _BLOCKING_INPUT_FIELDS:
+        remeha_modbus_unit.holding[address] = 0xFF
 
     appliance = await _updated_appliance(remeha_modbus_unit)
 
+    assert all(getattr(appliance, field) is None for field, _, _, _ in _BLOCKING_INPUT_FIELDS)
     assert appliance.backup_type is None
     assert appliance.season_mode is None
     assert appliance.forced_cooling_mode is None
@@ -400,6 +441,40 @@ async def test_appliance_nan_values(remeha_modbus_unit: MockModbusUnit):
     assert appliance.silent_mode is None
     assert appliance.silent_mode_start_time is None
     assert appliance.is_cooling_required() is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remeha_modbus_unit", ["appliance.json"], indirect=True)
+@pytest.mark.parametrize(
+    ("field", "address", "setter", "value"),
+    [
+        pytest.param(field, address, setter, value, id=f"{field}-{value.name}")
+        for field, address, enum_type, setter in _BLOCKING_INPUT_FIELDS
+        for value in enum_type
+    ],
+)
+async def test_appliance_set_blocking_inputs(
+    remeha_modbus_unit: MockModbusUnit,
+    field: str,
+    address: int,
+    setter: _BlockingInputSetter,
+    value: _BlockingInputValue,
+):
+    """Test that each blocking input field writes only its own register."""
+
+    appliance = await _updated_appliance(remeha_modbus_unit)
+    others = {
+        other: remeha_modbus_unit.holding[other]
+        for _, other, _, _ in _BLOCKING_INPUT_FIELDS
+        if other != address
+    }
+
+    await setter(appliance, value)
+
+    assert remeha_modbus_unit.holding[address] == value.value
+    assert {other: remeha_modbus_unit.holding[other] for other in others} == others
+    await appliance.async_update()
+    assert getattr(appliance, field) is value
 
 
 async def _restricted_appliance(unit: MockModbusUnit, gateway_base_offset=12) -> Appliance:

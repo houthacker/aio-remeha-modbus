@@ -59,7 +59,7 @@ class BlockingInputActivation(IntEnum):
     OPEN = 0
     """The blocking input is active when it's open / normally closed."""
 
-    CLOSED = 0
+    CLOSED = 1
     """The blocking input is active when it's closed / normally open."""
 
 
@@ -645,7 +645,7 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     """Configures the function of blocking input 2."""
 
     blocking_input_1_setting = enum(
-        address=475, enum_type=BlockingInputSetting, signed=False, nan=0xFF, writable=True
+        address=476, enum_type=BlockingInputSetting, signed=False, nan=0xFF, writable=True
     )
     """Configures the function of blocking input 1."""
 
