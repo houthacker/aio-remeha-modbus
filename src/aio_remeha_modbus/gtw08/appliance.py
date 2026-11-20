@@ -53,6 +53,73 @@ class BackupType(IntEnum):
     """The boiler is the backup heat source."""
 
 
+class BlockingInputActivation(IntEnum):
+    """Defines when a blocking input is active."""
+
+    OPEN = 0
+    """The blocking input is active when it's open / normally closed."""
+
+    CLOSED = 0
+    """The blocking input is active when it's closed / normally open."""
+
+
+class BlockingInputSetting(IntEnum):
+    """Configures the function of a blocking input."""
+
+    NOT_USED = 0
+    """The blocking input is not used."""
+
+    FULL_BLOCKING = 1
+    """Blocks the entire installation when the contact is activated.
+    Frost protection is not guaranteed in this mode.
+    """
+
+    PARTIAL_BLOCKING = 2
+    """Blocks Central Heating and Domestic Hot Water demands, while
+    keeping frost-protection active."""
+
+    USER_RESET_LOCKING = 3
+    """Allows an external signal on the related input to reset a locking
+    error on the appliance."""
+
+    BACKUP_RELIEVED = 4
+    """Authorizes or releases the backup heater (hydraulic boiler or
+    electric immersion heater) to operate alongside or instead of the
+    heat pump."""
+
+    GENERATOR_RELIEVED = 5
+    """Blocks the heat pump from contributing to the heat demand; only the
+    backup heater (boiler or electric element) is used."""
+
+    GENERATOR_AND_BACKUP_RELIEVED = 6
+    """Disables both the heat pump and the backup heater when the
+    contact is activated."""
+
+    HIGH_LOW_TARIFF = 7
+    """Switches between high and low electricity tariffs (for dynamic energy
+    contracts). The controller uses the configured tariff prices (HP062/HP063)
+    to determine whether the heat pump or the backup boiler is more economical."""
+
+    PV_ONLY = 8
+    """Uses excess solar power to overheat the heating circuit and/or DHW
+    tank using only the heat pump."""
+
+    PV_AND_BACKUP = 9
+    """Same as 8, but allows the electric backup heater to activate as well."""
+
+    SMART_GRID_READY = 10
+    """Configures the input for official SG-Ready operation."""
+
+    HEAT_COOL = 11
+    """Uses the external contact to switch the system between heating- and
+    cooling mode."""
+
+    CH_BLOCKING = 12
+    """Blocks the heat pump compressor from running when the related contact
+    is activated, while allowing the system to fall back on the backup
+    heater if heat is demanded."""
+
+
 class CoolingType(IntEnum):
     """Defines the type of cooling used by the appliance (if any)."""
 
@@ -422,6 +489,10 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
             "pump_speed",
             "actual_produced_power",
             "hybrid_internal_dhw_setpoint",
+            "blocking_input_1_activation",
+            "blocking_input_2_activation",
+            "blocking_input_2_setting",
+            "blocking_input_1_setting",
             "min_time_between_dhw_productions",
             "max_dhw_production_time",
             "heat_pump_defrost_active",
@@ -557,6 +628,26 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
     cop_calculated = uint16(address=462, scale=0.001)
     """Instantaneous calculated Coefficient of Performance (COP) (parameter HM031)."""
+
+    blocking_input_1_activation = enum(
+        address=473, enum_type=BlockingInputActivation, signed=False, nan=0xFF, writable=True
+    )
+    """Determines when blocking input 1 is active."""
+
+    blocking_input_2_activation = enum(
+        address=474, enum_type=BlockingInputActivation, signed=False, nan=0xFF, writable=True
+    )
+    """Determines when blocking input 2 is active."""
+
+    blocking_input_2_setting = enum(
+        address=475, enum_type=BlockingInputSetting, signed=False, nan=0xFF, writable=True
+    )
+    """Configures the function of blocking input 2."""
+
+    blocking_input_1_setting = enum(
+        address=475, enum_type=BlockingInputSetting, signed=False, nan=0xFF, writable=True
+    )
+    """Configures the function of blocking input 1."""
 
     min_time_between_dhw_productions = uint8(address=477, writable=in_range(range(11)), unit="h")
     """The minimum time between two periods of producing DHW."""
@@ -752,6 +843,26 @@ class Appliance(RemehaComponent):  # ruff: ignore[too-many-public-methods]
         """Do not force summer mode."""
 
         await self.write("forced_summer_mode", False)
+
+    async def async_set_blocking_input_1_activation(self, when: BlockingInputActivation) -> None:
+        """Set when the external input BL1 is activated."""
+
+        await self.write("blocking_input_1_activation", when)
+
+    async def async_set_blocking_input_2_activation(self, when: BlockingInputActivation) -> None:
+        """Set when the external input BL2 is activated."""
+
+        await self.write("blocking_input_2_activation", when)
+
+    async def async_set_blocking_input_2_setting(self, setting: BlockingInputSetting) -> None:
+        """Set the function of external input BL2."""
+
+        await self.write("blocking_input_2_setting", setting)
+
+    async def async_set_blocking_input_1_setting(self, setting: BlockingInputSetting) -> None:
+        """Set the function of external input BL1."""
+
+        await self.write("blocking_input_1_setting", setting)
 
     async def async_set_min_time_between_dhw_productions(self, hours: float) -> None:
         """Set the minimum required time between two DHW productions.
