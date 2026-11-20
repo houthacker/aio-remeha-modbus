@@ -93,6 +93,18 @@ class ClimateZoneMode(IntEnum):
     ANTI_FROST = 2
 
 
+class ClimateZoneActivity(IntEnum):
+    """Enumerates the available zone activities."""
+
+    ANTI_FROST = 0
+
+    REDUCED = 1
+
+    COMFORT = 2
+
+    LEGIONEL = 3
+
+
 class ClimateZoneHeatingMode(IntEnum):
     """The mode the zone is currently functioning in."""
 
@@ -338,8 +350,11 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
     room_temperature = int16(address=1104, scale=0.1, unit="°C")
     """The current room temperature"""
 
+    activity = enum(address=1107, enum_type=ClimateZoneActivity, nan=0xFF)
+    """The current zone activity"""
+
     running_mode = enum(address=1108, enum_type=ClimateZoneRunningMode, nan=0xFF)
-    """The current running mode of the climate zone"""
+    """The manner in which the zone is currently controlled."""
 
     heating_mode = enum(address=1109, enum_type=ClimateZoneHeatingMode, nan=0xFF)
     """The current heating mode of the climate zone"""
