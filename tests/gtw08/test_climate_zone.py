@@ -955,6 +955,44 @@ async def test_climate_zone_set_room_setpoint_out_of_range(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("setter", "field", "register", "value"),
+    [
+        pytest.param(
+            "async_set_heating_curve_slope", "heating_curve_slope", 674, 1.2, id="slope_CP230"
+        ),
+        pytest.param(
+            "async_set_heating_curve_base_comfort",
+            "heating_curve_base_comfort",
+            675,
+            22.5,
+            id="base_comfort_CP210",
+        ),
+        pytest.param(
+            "async_set_heating_curve_base_reduced",
+            "heating_curve_base_reduced",
+            676,
+            15.0,
+            id="base_reduced_CP220",
+        ),
+    ],
+)
+async def test_climate_zone_set_heating_curve(
+    gtw_08: GTW08, setter: str, field: str, register: int, value: float
+):
+    """Test that the heating curve settings are written to their own register, scaled by 0.1."""
+
+    zone = gtw_08.zones[0]
+    unit = get_modbus_unit(gtw_08)
+
+    await getattr(zone, setter)(value)
+
+    assert unit.holding[register] == round(value * 10)
+    await zone.async_update()
+    assert getattr(zone, field) == value
+
+
+@pytest.mark.asyncio
 async def test_climate_zone_set_dhw_calorifier_hysteresis(gtw_08: GTW08):
     """Test that the DHW calorifier hysteresis is written, scaled by 0.01."""
 

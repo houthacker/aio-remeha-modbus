@@ -829,6 +829,31 @@ class ClimateZone(RemehaComponent):  # ruff: ignore[too-many-public-methods]
 
         await self.write("room_cooling_setpoint_5", value)
 
+    async def async_set_heating_curve_slope(self, value: float) -> None:
+        """Write the slope of the heating curve (parameter CP230)."""
+
+        await self.write("heating_curve_slope", value)
+
+    async def async_set_heating_curve_base_comfort(self, value: float) -> None:
+        """Write the heating curve base temperature in comfort mode (parameter CP210).
+
+        Args:
+            value (float): The base temperature in degrees C. 15 °C means off.
+
+        """
+
+        await self.write("heating_curve_base_comfort", value)
+
+    async def async_set_heating_curve_base_reduced(self, value: float) -> None:
+        """Write the heating curve base temperature in reduced mode (parameter CP220).
+
+        Args:
+            value (float): The base temperature in degrees C. 15 °C means off.
+
+        """
+
+        await self.write("heating_curve_base_reduced", value)
+
     async def async_set_dhw_calorifier_hysteresis(self, value: float) -> None:
         """Write the DHW Calorifier Hysteresis.
 
